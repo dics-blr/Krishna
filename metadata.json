@@ -1,0 +1,6 @@
+{
+  "name": "DICS – Employee Onboarding Portal",
+  "description": "Employee onboarding digitization portal and HR Admin dashboard for Digital Instruments & Control Systems (DICS Global), Bengaluru, India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
