@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { HR_FORMS_CATALOG } from '../../shared/formsCatalog';
 import { isFormSlotCompleted } from '../../shared/onboardingLogic';
-import type { OnboardingSessionState, ProgressBreakdown } from '../../shared/types';
+import type { AnyFormId, OnboardingSessionState, ProgressBreakdown } from '../../shared/types';
 
 export type OnboardingStepKey =
   | 'overview'
@@ -108,7 +108,7 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
         </div>
 
         {HR_FORMS_CATALOG.map((form) => {
-          const isComplete = isFormSlotCompleted(session.formsById[form.id]);
+          const isComplete = isFormSlotCompleted(form.id as AnyFormId, session.formResponses);
           const isActive = activeStep === form.id;
           return (
             <button
@@ -125,7 +125,7 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                 <span className="font-mono tabular-nums mr-1.5">
                   {String(form.formNumber).padStart(2, '0')}.
                 </span>
-                Form {String(form.formNumber).padStart(2, '0')} Slot
+                {form.shortTitle}
               </span>
               {isComplete ? (
                 <CheckCircle2

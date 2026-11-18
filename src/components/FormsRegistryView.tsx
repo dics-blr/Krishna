@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileCheck2, FileSpreadsheet, Paperclip } from 'lucide-react';
+import { CheckCircle2, FileCheck2, FileSpreadsheet, Paperclip } from 'lucide-react';
 import type { HRFormDefinition } from '../shared/types';
 
 interface FormsRegistryViewProps {
@@ -22,9 +22,9 @@ export const FormsRegistryView: React.FC<FormsRegistryViewProps> = ({
             Nine Original HR Forms Registry
           </h1>
           <p className="text-sm text-slate-600">
-            Structural container architecture for DICS Global&apos;s nine employee onboarding
-            documents. Form fields and statutory copy remain unmapped placeholders until the
-            original files are provided.
+            Document-to-form mapping for Digital Instruments &amp; Control Systems (DICS Global).
+            Each slot preserves the original headings, section order, clauses, and Office Use
+            boundaries of the nine uploaded PDF documents.
           </p>
         </div>
 
@@ -57,16 +57,16 @@ export const FormsRegistryView: React.FC<FormsRegistryViewProps> = ({
                       isSelected ? 'text-blue-200' : 'text-[#1D4ED8]'
                     }`}
                   >
-                    {form.code}
+                    {form.code} · {form.sourceFilename}
                   </div>
-                  <div className="text-sm font-medium truncate">{form.title}</div>
+                  <div className="text-sm font-medium truncate">{form.shortTitle}</div>
                 </div>
                 <span
                   className={`text-xs whitespace-nowrap shrink-0 ${
                     isSelected ? 'text-slate-200' : 'text-slate-500'
                   }`}
                 >
-                  Slot {String(form.formNumber).padStart(2, '0')}
+                  {form.pageCount} {form.pageCount === 1 ? 'Page' : 'Pages'}
                 </span>
               </button>
             );
@@ -78,25 +78,35 @@ export const FormsRegistryView: React.FC<FormsRegistryViewProps> = ({
           <section className="lg:col-span-7 rounded-lg border border-slate-200 bg-white p-6 space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
               <div className="space-y-1">
-                <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-mono">
                   <FileSpreadsheet className="w-4 h-4 text-[#1D4ED8]" />
                   <span>{activeForm.code}</span>
                   <span aria-hidden="true">·</span>
                   <span>Form {activeForm.formNumber} of 9</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{activeForm.sourceFilename}</span>
                 </div>
                 <h2 className="text-lg font-semibold text-[#0B1F3A]">{activeForm.title}</h2>
+                <p className="text-xs text-slate-500">{activeForm.documentReference}</p>
               </div>
 
-              <span className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1 whitespace-nowrap">
-                Awaiting Original Document
-              </span>
+              {activeForm.mappingStatus === 'mapped' ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1 whitespace-nowrap">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Mapped from PDF</span>
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded px-2.5 py-1 whitespace-nowrap">
+                  Pending Mapping
+                </span>
+              )}
             </div>
 
             <p className="text-sm text-slate-600 leading-relaxed">{activeForm.summary}</p>
 
             <div className="space-y-3">
               <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                Prepared Section Structure
+                Mapped Section Structure
               </h3>
               <div className="space-y-2.5">
                 {activeForm.sectionSlots.map((sec) => (

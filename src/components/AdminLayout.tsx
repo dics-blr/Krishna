@@ -5,17 +5,21 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   Link2,
+  LogOut,
   Menu,
   X,
   ArrowUpRight,
 } from 'lucide-react';
-import type { AdminNavSection } from '../shared/types';
+import type { AdminNavSection, HrUserProfile, SupabaseReadinessInfo } from '../shared/types';
 import { LogoPlaceholder } from './LogoPlaceholder';
 
 interface AdminLayoutProps {
   activeSection: AdminNavSection;
   onSelectSection: (section: AdminNavSection) => void;
   onOpenSampleOnboarding: () => void;
+  hrUser?: HrUserProfile | null;
+  readiness?: SupabaseReadinessInfo | null;
+  onSignOut?: () => void;
   children: React.ReactNode;
 }
 
@@ -36,12 +40,19 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   activeSection,
   onSelectSection,
   onOpenSampleOnboarding,
+  hrUser,
+  readiness,
+  onSignOut,
   children,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const activeLabel =
     NAV_ITEMS.find((item) => item.id === activeSection)?.label ?? 'HR Overview';
+
+  const statusText = readiness?.configured
+    ? 'Supabase Connected · Auth Enforced'
+    : 'Development Fallback · Stage 1 In-Memory';
 
   const handleNavClick = (section: AdminNavSection) => {
     onSelectSection(section);
@@ -81,9 +92,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <div className="p-4 border-t border-slate-200 bg-white space-y-3">
           <div className="flex items-start gap-2 text-xs text-slate-600">
             <Building2 className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium text-slate-800">Bengaluru Headquarters</p>
-              <p className="text-slate-500">Stage 1 Portal Shell</p>
+            <div className="min-w-0">
+              <p className="font-medium text-slate-800 truncate">
+                {hrUser ? hrUser.fullName : 'Bengaluru Headquarters'}
+              </p>
+              <p className="text-slate-500 truncate">
+                {hrUser
+                  ? hrUser.email
+                  : readiness?.configured
+                    ? 'Supabase Active'
+                    : 'Fallback Preview Mode'}
+              </p>
             </div>
           </div>
           <button
@@ -94,6 +113,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <span>Open Employee Link Preview</span>
             <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
           </button>
+          {hrUser && onSignOut && (
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-slate-300 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors whitespace-nowrap"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0" />
+              <span>Sign Out</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -133,7 +162,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               </button>
             );
           })}
-          <div className="pt-2">
+          <div className="pt-2 space-y-2">
             <button
               type="button"
               onClick={() => {
@@ -145,6 +174,19 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <span>Open Employee Link Preview</span>
               <ArrowUpRight className="w-4 h-4" />
             </button>
+            {hrUser && onSignOut && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onSignOut();
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-md border border-slate-300 text-sm font-medium text-slate-700 bg-white"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out ({hrUser.email})</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -162,7 +204,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
           <div className="flex items-center gap-4 shrink-0">
             <span className="text-xs text-slate-500 whitespace-nowrap">
-              Stage 1 Sample Workspace · No Live Employee Data
+              {statusText}
             </span>
             <button
               type="button"

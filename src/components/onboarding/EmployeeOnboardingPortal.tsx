@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -6,18 +6,20 @@ import {
   CheckCircle2,
   Clock,
   FileSpreadsheet,
+  Lock,
 } from 'lucide-react';
 import { onboardingRepository } from '../../lib/supabase/repository';
-import { HR_FORMS_CATALOG } from '../../shared/formsCatalog';
+import { DOCUMENT_UPLOAD_CATEGORIES, HR_FORMS_CATALOG } from '../../shared/formsCatalog';
 import {
   calculateOnboardingProgress,
   createInitialSessionState,
+  isFormSlotCompleted,
 } from '../../shared/onboardingLogic';
 import type {
-  FormSlotDraft,
+  AnyFormId,
+  OnboardingFormResponses,
   OnboardingInvitation,
   OnboardingSessionState,
-  UploadedDocumentItem,
 } from '../../shared/types';
 import { LogoPlaceholder } from '../LogoPlaceholder';
 import { DocumentUploadPanel } from './DocumentUploadPanel';
@@ -41,19 +43,25 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
   const [session, setSession] = useState<OnboardingSessionState>(() =>
     createInitialSessionState(token)
   );
+  const sessionRef = useRef<OnboardingSessionState>(session);
+  sessionRef.current = session;
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    setSession(createInitialSessionState(token));
+    const initial = createInitialSessionState(token);
+    setSession(initial);
+    sessionRef.current = initial;
     setActiveStep('overview');
 
     onboardingRepository
-      .getInvitationByToken(token)
-      .then((inv) => {
+      .loadOnboardingSession(token)
+      .then((hydrated) => {
         if (!cancelled) {
-          setInvitation(inv);
+          setInvitation(hydrated.invitation);
+          setSession(hydrated.session);
+          sessionRef.current = hydrated.session;
         }
       })
       .catch((err) => {
@@ -73,28 +81,60 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
   }, [token]);
 
   const progress = useMemo(() => calculateOnboardingProgress(session), [session]);
+  const isLocked = Boolean(session.submittedAt);
 
-  const handleUpdateDraft = (formId: string, patch: Partial<FormSlotDraft>) => {
-    setSession((prev) => ({
-      ...prev,
-      formsById: {
-        ...prev.formsById,
-        [formId]: {
-          ...prev.formsById[formId],
-          ...patch,
+  const handleUpdateFormResponse = <K extends AnyFormId>(
+    formId: K,
+    patch: Partial<OnboardingFormResponses[K]>
+  ) => {
+    setSession((prev) => {
+      const next: OnboardingSessionState = {
+        ...prev,
+        formResponses: {
+          ...prev.formResponses,
+          [formId]: {
+            ...prev.formResponses[formId],
+            ...patch,
+          },
         },
-      },
-    }));
+      };
+      sessionRef.current = next;
+      return next;
+    });
   };
 
-  const handleAddDocument = (doc: UploadedDocumentItem) => {
+  const handleSaveFormDraft = async (formId: AnyFormId) => {
+    const latestPayload = sessionRef.current.formResponses[formId];
+    const saved = await onboardingRepository.saveFormDraft(token, formId, latestPayload);
+    handleUpdateFormResponse(formId, { updatedAt: saved.updatedAt } as Partial<
+      OnboardingFormResponses[typeof formId]
+    >);
+  };
+
+  const handleUploadDocumentFile = async (slotId: string, slotLabel: string, file: File) => {
+    const uploaded = await onboardingRepository.uploadOnboardingDocument(
+      token,
+      slotId,
+      slotLabel,
+      file
+    );
     setSession((prev) => ({
       ...prev,
-      uploadedDocuments: [...prev.uploadedDocuments, doc],
+      uploadedDocuments: [...prev.uploadedDocuments, uploaded],
     }));
   };
 
-  const handleRemoveDocument = (docId: string) => {
+  const handleAttachInlineFormFile = (slotId: string, file: File) => {
+    const category =
+      DOCUMENT_UPLOAD_CATEGORIES.find((c) => c.slotId === slotId) ??
+      DOCUMENT_UPLOAD_CATEGORIES[DOCUMENT_UPLOAD_CATEGORIES.length - 1];
+    void handleUploadDocumentFile(category.slotId, category.label, file).catch(() => {
+      // Inline form attachments can still be retried in DocumentUploadPanel
+    });
+  };
+
+  const handleRemoveDocument = async (docId: string) => {
+    await onboardingRepository.deleteOnboardingDocument(token, docId);
     setSession((prev) => ({
       ...prev,
       uploadedDocuments: prev.uploadedDocuments.filter((d) => d.id !== docId),
@@ -106,10 +146,14 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
       ...prev,
       finalDeclarationAccepted: accepted,
     }));
+    void onboardingRepository.saveFinalDeclaration(token, accepted).catch(() => {
+      // Final submission endpoint re-validates declaration state
+    });
   };
 
   const handleSubmitPreview = async () => {
-    const receipt = await onboardingRepository.submitPreviewOnboarding(token, session);
+    // Persist any unsaved form payloads first before calling submit
+    const receipt = await onboardingRepository.submitPreviewOnboarding(token, sessionRef.current);
     setSession((prev) => ({
       ...prev,
       submittedAt: receipt.submittedAt,
@@ -159,14 +203,16 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
               <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <h1 className="text-lg font-semibold text-[#0B1F3A]">
-                  Onboarding Invitation Unavailable
+                  {loadError?.toLowerCase().includes('expired')
+                    ? 'Onboarding Invitation Expired'
+                    : 'Onboarding Invitation Unavailable'}
                 </h1>
                 <p className="text-sm text-slate-600">
                   {loadError || 'This unique onboarding invitation link could not be verified.'}
                 </p>
               </div>
             </div>
-            <p className="font-mono text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2.5">
+            <p className="font-mono text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2.5 break-all">
               Requested token: {token}
             </p>
             <button
@@ -190,7 +236,21 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
             </div>
 
             {/* Right Main Step Viewport */}
-            <div className="lg:col-span-8 xl:col-span-9 min-w-0">
+            <div className="lg:col-span-8 xl:col-span-9 min-w-0 space-y-4">
+              {isLocked && (
+                <div
+                  role="status"
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900 flex items-center gap-2.5"
+                >
+                  <Lock className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>
+                    Packet submitted (Receipt{' '}
+                    <span className="font-mono font-semibold">{session.receiptCode}</span>). All
+                    nine forms and document attachments are locked against further edits.
+                  </span>
+                </div>
+              )}
+
               {activeStep === 'overview' && (
                 <section className="rounded-lg border border-slate-200 bg-white p-5 sm:p-7 space-y-6">
                   <div className="border-b border-slate-200 pb-5 space-y-1.5">
@@ -202,8 +262,8 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
                     </h1>
                     <p className="text-sm text-slate-600 leading-relaxed">
                       You have accessed this onboarding workspace directly via your unique
-                      invitation link. Complete each of the nine HR form modules, attach any
-                      supporting files, and verify everything on the final review page.
+                      invitation link. Complete all nine original DICS Global HR forms, attach your
+                      supporting documents, and verify your packet on the final review page.
                     </p>
                   </div>
 
@@ -238,24 +298,41 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
                       Onboarding Checklist (9 HR Forms + Document Upload)
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {HR_FORMS_CATALOG.map((form) => (
-                        <button
-                          key={form.id}
-                          type="button"
-                          onClick={() => setActiveStep(form.id as OnboardingStepKey)}
-                          className="text-left rounded-md border border-slate-200 p-3.5 hover:border-[#1D4ED8] hover:bg-blue-50/30 transition-colors space-y-1"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-xs font-semibold text-[#1D4ED8]">
-                              {form.code}
-                            </span>
-                            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
-                          </div>
-                          <p className="text-xs font-medium text-[#0B1F3A] leading-snug">
-                            {form.title}
-                          </p>
-                        </button>
-                      ))}
+                      {HR_FORMS_CATALOG.map((form) => {
+                        const isComplete = isFormSlotCompleted(
+                          form.id as AnyFormId,
+                          session.formResponses
+                        );
+                        return (
+                          <button
+                            key={form.id}
+                            type="button"
+                            onClick={() => setActiveStep(form.id as OnboardingStepKey)}
+                            className={`text-left rounded-md border p-3.5 transition-colors space-y-1 ${
+                              isComplete
+                                ? 'border-emerald-200 bg-emerald-50/30 hover:border-emerald-400'
+                                : 'border-slate-200 hover:border-[#1D4ED8] hover:bg-blue-50/30'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-xs font-semibold text-[#1D4ED8]">
+                                {form.code}
+                              </span>
+                              {isComplete ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400" />
+                              )}
+                            </div>
+                            <p className="text-xs font-medium text-[#0B1F3A] leading-snug">
+                              {form.shortTitle}
+                            </p>
+                            <p className="text-[11px] text-slate-500 truncate">
+                              {form.sourceFilename}
+                            </p>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -272,7 +349,7 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
                       onClick={() => setActiveStep('form-01')}
                       className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-sm font-medium transition-colors"
                     >
-                      <span>Start Form 01</span>
+                      <span>{isLocked ? 'Inspect Form 01' : 'Start Form 01'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -282,10 +359,13 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
               {activeForm && (
                 <FormSlotEditor
                   form={activeForm}
-                  draft={session.formsById[activeForm.id]}
+                  formResponses={session.formResponses}
                   isFirstForm={activeFormIndex === 0}
                   isLastForm={activeFormIndex === HR_FORMS_CATALOG.length - 1}
-                  onUpdateDraft={handleUpdateDraft}
+                  locked={isLocked}
+                  onUpdateFormResponse={handleUpdateFormResponse}
+                  onSaveFormDraft={handleSaveFormDraft}
+                  onAttachDocumentFile={handleAttachInlineFormFile}
                   onPrevious={() => {
                     if (activeFormIndex === 0) {
                       setActiveStep('overview');
@@ -311,7 +391,8 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
                 <DocumentUploadPanel
                   invitationToken={token}
                   uploadedDocuments={session.uploadedDocuments}
-                  onAddDocument={handleAddDocument}
+                  locked={isLocked}
+                  onUploadDocumentFile={handleUploadDocumentFile}
                   onRemoveDocument={handleRemoveDocument}
                   onPrevious={() => setActiveStep('form-09')}
                   onNext={() => setActiveStep('review')}

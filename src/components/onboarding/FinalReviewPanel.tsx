@@ -7,8 +7,12 @@ import {
   Send,
 } from 'lucide-react';
 import { HR_FORMS_CATALOG } from '../../shared/formsCatalog';
-import { formatBytes, isFormSlotCompleted } from '../../shared/onboardingLogic';
-import type { OnboardingSessionState, ProgressBreakdown } from '../../shared/types';
+import {
+  formatBytes,
+  getFormResponseSummary,
+  isFormSlotCompleted,
+} from '../../shared/onboardingLogic';
+import type { AnyFormId, OnboardingSessionState, ProgressBreakdown } from '../../shared/types';
 import type { OnboardingStepKey } from './ProgressTracker';
 
 interface FinalReviewPanelProps {
@@ -37,7 +41,7 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
 
     if (!progress.readyForSubmission) {
       setSubmitError(
-        'Complete all nine HR form slots, attach at least one file, and check the final confirmation box before submitting.'
+        'Complete all nine HR forms, attach at least one supporting file, and check the final confirmation box before submitting.'
       );
       return;
     }
@@ -61,18 +65,19 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
           </div>
           <div className="space-y-1">
             <h2 className="text-xl font-semibold text-[#0B1F3A]">
-              Stage 1 Preview Submission Verified
+              Onboarding Packet Submitted &amp; Locked
             </h2>
             <p className="text-sm text-slate-600">
-              All nine form containers and staged attachments passed Stage 1 completeness checks.
-              No personal employee data was written to a production database in this initial stage.
+              All nine DICS Global HR forms and supporting attachments passed completeness checks
+              and have been locked against further edits. HR Admin will now complete the
+              employer-only Office Use verification sections.
             </p>
           </div>
         </div>
 
         <div className="rounded-md border border-slate-200 bg-slate-50 p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div>
-            <span className="text-slate-500 block">Preview Receipt Reference</span>
+            <span className="text-slate-500 block">Receipt Reference</span>
             <span className="font-mono font-semibold text-[#0B1F3A]">{session.receiptCode}</span>
           </div>
           <div>
@@ -118,8 +123,8 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
           Final Review &amp; Onboarding Submission
         </h2>
         <p className="text-sm text-slate-600">
-          Review the status of all nine HR form slots and your attached documents before running
-          final submission.
+          Review the status of all nine DICS Global HR forms and your attached supporting documents
+          before submitting your onboarding packet.
         </p>
       </div>
 
@@ -130,8 +135,9 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
         </h3>
         <div className="divide-y divide-slate-200 rounded-md border border-slate-200 overflow-hidden">
           {HR_FORMS_CATALOG.map((form) => {
-            const draft = session.formsById[form.id];
-            const complete = isFormSlotCompleted(draft);
+            const formId = form.id as AnyFormId;
+            const complete = isFormSlotCompleted(formId, session.formResponses);
+            const summary = getFormResponseSummary(formId, session.formResponses);
             return (
               <div
                 key={form.id}
@@ -139,18 +145,14 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-medium text-[#1D4ED8] tabular-nums">
+                    <span className="font-mono text-xs font-medium text-[#1D4ED8] tabular-nums shrink-0">
                       {form.code}
                     </span>
                     <span className="text-sm font-medium text-[#0B1F3A] truncate">
-                      {form.title}
+                      {form.shortTitle}
                     </span>
                   </div>
-                  {draft?.templateFieldOne && (
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Entry: {draft.templateFieldOne}
-                    </p>
-                  )}
+                  <p className="text-xs text-slate-500 truncate mt-0.5">{summary}</p>
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0">
@@ -214,7 +216,7 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
         )}
       </div>
 
-      {/* Neutral Confirmation Checkbox */}
+      {/* Confirmation Checkbox */}
       <div className="rounded-md border border-slate-200 bg-slate-50 p-4">
         <label className="flex items-start gap-2.5 cursor-pointer select-none">
           <input
@@ -227,9 +229,9 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8] focus:ring-[#1D4ED8]"
           />
           <span className="text-xs text-slate-700 leading-relaxed">
-            I confirm that all nine form slots and attached document entries have been reviewed for
-            this Stage 1 onboarding portal preview submission. (Final statutory declaration wording
-            will be mapped from the original DICS Global documents in Stage 2.)
+            I confirm that all particulars entered across all nine DICS Global HR onboarding forms
+            (DICS-HR-01 through DICS-HR-09) and all attached supporting documents are accurate and
+            complete to the best of my knowledge.
           </span>
         </label>
       </div>
@@ -260,7 +262,7 @@ export const FinalReviewPanel: React.FC<FinalReviewPanelProps> = ({
           className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#0B1F3A] hover:bg-[#132D52] disabled:opacity-60 text-sm font-medium text-white transition-colors"
         >
           <Send className="w-4 h-4" />
-          <span>{submitting ? 'Submitting Preview...' : 'Submit Onboarding Preview'}</span>
+          <span>{submitting ? 'Submitting Packet...' : 'Submit Onboarding Packet'}</span>
         </button>
       </div>
     </form>

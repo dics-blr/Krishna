@@ -4,22 +4,20 @@ import {
   ArrowRight,
   FileText,
   FolderLock,
+  Loader2,
   Trash2,
   UploadCloud,
 } from 'lucide-react';
 import { DOCUMENT_UPLOAD_CATEGORIES } from '../../shared/formsCatalog';
-import {
-  buildSupabaseStoragePath,
-  formatBytes,
-  validateDocumentFile,
-} from '../../shared/onboardingLogic';
+import { formatBytes, validateDocumentFile } from '../../shared/onboardingLogic';
 import type { UploadedDocumentItem } from '../../shared/types';
 
 interface DocumentUploadPanelProps {
   invitationToken: string;
   uploadedDocuments: UploadedDocumentItem[];
-  onAddDocument: (doc: UploadedDocumentItem) => void;
-  onRemoveDocument: (docId: string) => void;
+  locked?: boolean;
+  onUploadDocumentFile: (slotId: string, slotLabel: string, file: File) => Promise<void>;
+  onRemoveDocument: (docId: string) => Promise<void> | void;
   onPrevious: () => void;
   onNext: () => void;
 }
@@ -27,7 +25,8 @@ interface DocumentUploadPanelProps {
 export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
   invitationToken,
   uploadedDocuments,
-  onAddDocument,
+  locked = false,
+  onUploadDocumentFile,
   onRemoveDocument,
   onPrevious,
   onNext,
@@ -37,51 +36,40 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
     DOCUMENT_UPLOAD_CATEGORIES[0].slotId
   );
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const selectedCategory =
     DOCUMENT_UPLOAD_CATEGORIES.find((c) => c.slotId === selectedSlotId) ??
     DOCUMENT_UPLOAD_CATEGORIES[0];
 
-  const handleFiles = (fileList: FileList | null) => {
-    if (!fileList || fileList.length === 0) return;
+  const handleFiles = async (fileList: FileList | null) => {
+    if (locked || !fileList || fileList.length === 0) return;
     setUploadError(null);
+    setUploading(true);
 
-    for (const file of Array.from(fileList)) {
-      const check = validateDocumentFile({
-        name: file.name,
-        sizeBytes: file.size,
-        mimeType: file.type,
-      });
+    try {
+      for (const file of Array.from(fileList)) {
+        const check = validateDocumentFile({
+          name: file.name,
+          sizeBytes: file.size,
+          mimeType: file.type,
+        });
 
-      if (!check.valid) {
-        setUploadError(check.error || 'Invalid file selected.');
-        continue;
+        if (!check.valid) {
+          setUploadError(check.error || 'Invalid file selected.');
+          continue;
+        }
+
+        await onUploadDocumentFile(selectedCategory.slotId, selectedCategory.label, file);
       }
-
-      const storageBucketPath = buildSupabaseStoragePath(
-        invitationToken,
-        selectedCategory.slotId,
-        file.name
-      );
-
-      const newDoc: UploadedDocumentItem = {
-        id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-        slotId: selectedCategory.slotId,
-        slotLabel: selectedCategory.label,
-        fileName: file.name,
-        mimeType: file.type,
-        sizeBytes: file.size,
-        storageBucketPath,
-        uploadedAt: new Date().toISOString(),
-        storageMode: 'stage1_memory_preview',
-      };
-
-      onAddDocument(newDoc);
-    }
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Unable to upload selected document.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -98,9 +86,9 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
           Document Upload Center
         </h2>
         <p className="text-sm text-slate-600">
-          Attach supporting PDF, JPG, or PNG files (up to 10 MB per file). In Stage 1, files are
-          validated in-memory and mapped to their target Supabase private storage path without
-          uploading to external servers yet.
+          Attach supporting PDF, JPG, or PNG files (up to 10 MB per file). Files are scoped to
+          invitation <span className="font-mono text-xs">{invitationToken}</span> and stored in the
+          private onboarding storage bucket via signed URLs when Supabase is configured.
         </p>
       </div>
 
@@ -112,8 +100,9 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
         <select
           id="upload-slot-select"
           value={selectedSlotId}
+          disabled={locked}
           onChange={(e) => setSelectedSlotId(e.target.value)}
-          className="w-full md:w-96 h-10 px-3 rounded-md border border-slate-300 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]"
+          className="w-full md:w-96 h-10 px-3 rounded-md border border-slate-300 text-sm text-slate-900 bg-white disabled:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]"
         >
           {DOCUMENT_UPLOAD_CATEGORIES.map((cat) => (
             <option key={cat.slotId} value={cat.slotId}>
@@ -127,6 +116,7 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
       {/* Dropzone */}
       <div
         onDragOver={(e) => {
+          if (locked) return;
           e.preventDefault();
           setIsDragging(true);
         }}
@@ -134,17 +124,27 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
         onDrop={(e) => {
           e.preventDefault();
           setIsDragging(false);
-          handleFiles(e.dataTransfer.files);
+          void handleFiles(e.dataTransfer.files);
         }}
         className={`rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-          isDragging
-            ? 'border-[#1D4ED8] bg-blue-50/50'
-            : 'border-slate-300 bg-slate-50/60 hover:bg-slate-50'
+          locked
+            ? 'border-slate-200 bg-slate-100/70 opacity-70'
+            : isDragging
+              ? 'border-[#1D4ED8] bg-blue-50/50'
+              : 'border-slate-300 bg-slate-50/60 hover:bg-slate-50'
         }`}
       >
-        <UploadCloud className="w-8 h-8 text-[#1D4ED8] mx-auto mb-3" />
+        {uploading ? (
+          <Loader2 className="w-8 h-8 text-[#1D4ED8] mx-auto mb-3 animate-spin" />
+        ) : (
+          <UploadCloud className="w-8 h-8 text-[#1D4ED8] mx-auto mb-3" />
+        )}
         <p className="text-sm font-medium text-[#0B1F3A]">
-          Drag and drop onboarding files here, or browse from your device
+          {locked
+            ? 'Onboarding packet submitted — document uploads are locked'
+            : uploading
+              ? 'Uploading document...'
+              : 'Drag and drop onboarding files here, or browse from your device'}
         </p>
         <p className="text-xs text-slate-500 mt-1 mb-4">
           Accepted formats: PDF, JPG, PNG · Maximum size: 10 MB per file
@@ -155,16 +155,20 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
           id="onboarding-file-input"
           type="file"
           multiple
+          disabled={locked || uploading}
           accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={(e) => {
+            void handleFiles(e.target.files);
+          }}
           className="sr-only"
         />
         <button
           type="button"
+          disabled={locked || uploading}
           onClick={() => fileInputRef.current?.click()}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#0B1F3A] hover:bg-[#132D52] text-white text-xs font-medium transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#0B1F3A] hover:bg-[#132D52] disabled:opacity-50 text-white text-xs font-medium transition-colors"
         >
-          Select Files to Attach
+          <span>{uploading ? 'Uploading...' : 'Select Files to Attach'}</span>
         </button>
       </div>
 
@@ -181,13 +185,13 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[#0B1F3A]">
-            Staged Documents ({uploadedDocuments.length})
+            Attached Documents ({uploadedDocuments.length})
           </h3>
         </div>
 
         {uploadedDocuments.length === 0 ? (
           <div className="rounded-md border border-slate-200 p-5 text-center text-xs text-slate-500">
-            No files attached yet. Attach at least one document to enable final submission preview.
+            No files attached yet. Attach at least one document to enable final onboarding submission.
           </div>
         ) : (
           <div className="divide-y divide-slate-200 rounded-md border border-slate-200 overflow-hidden">
@@ -206,20 +210,24 @@ export const DocumentUploadPanel: React.FC<DocumentUploadPanelProps> = ({
                       {doc.slotLabel} · <span className="tabular-nums">{formatBytes(doc.sizeBytes)}</span>
                     </p>
                     <p className="font-mono text-[11px] text-slate-500 truncate">
-                      Target path: {doc.storageBucketPath}
+                      Storage path: {doc.storageBucketPath}
                     </p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onRemoveDocument(doc.id)}
-                  aria-label={`Remove ${doc.fileName}`}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-slate-200 text-xs font-medium text-slate-600 hover:text-red-700 hover:border-red-200 hover:bg-red-50 transition-colors self-start sm:self-center shrink-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Remove</span>
-                </button>
+                {!locked && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void onRemoveDocument(doc.id);
+                    }}
+                    aria-label={`Remove ${doc.fileName}`}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-slate-200 text-xs font-medium text-slate-600 hover:text-red-700 hover:border-red-200 hover:bg-red-50 transition-colors self-start sm:self-center shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
