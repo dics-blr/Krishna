@@ -1,12 +1,8 @@
-import 'dotenv/config';
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { SupabaseReadinessInfo } from './src/shared/types.ts';
-import { getServerSupabaseEnvStatus, getSupabaseAdminClient } from './src/server/supabaseAdmin.ts';
-import { SupabaseServerStore } from './src/server/onboardingBackend.ts';
-import { createOnboardingApiRouter } from './src/server/onboardingRouter.ts';
+import { createApiApp } from './src/server/apiApp.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,49 +10,8 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3000);
 const isProduction = process.env.NODE_ENV === 'production';
 
-function getSupabaseReadiness(): SupabaseReadinessInfo {
-  const env = getServerSupabaseEnvStatus();
-  const configured = env.fullyConfigured && env.anonKeyConfigured;
-  const publicUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
-  const publicAnonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
-  return {
-    configured,
-    mode: configured ? 'supabase_connected' : 'stage1_preview',
-    databaseSchemaFile: 'supabase/migrations/',
-    storageBucketName: env.storageBucket,
-    authEnforced: true,
-    authNotice: configured
-      ? 'Supabase Auth and server-side service-role persistence are configured. All /api/admin/* routes require a valid HR Admin session.'
-      : 'HR Portal access requires an authorized HR Administrator login. Configure Supabase runtime secrets to enable live sign-in.',
-    publicAuthConfig: publicUrl && publicAnonKey ? { url: publicUrl, anonKey: publicAnonKey } : null,
-  };
-}
-
-function getOnboardingStore(): SupabaseServerStore | null {
-  const client = getSupabaseAdminClient();
-  if (!client) return null;
-  const env = getServerSupabaseEnvStatus();
-  return new SupabaseServerStore(client, env.storageBucket);
-}
-
-async function createApp() {
-  const app = express();
-  app.set('trust proxy', 1);
-  app.use(express.json({ limit: '10mb' }));
-
-  app.get('/api/health', (_req, res) => {
-    const readiness = getSupabaseReadiness();
-    res.json({
-      status: 'ok',
-      portal: 'DICS – Employee Onboarding Portal',
-      organization: 'Digital Instruments & Control Systems (DICS Global)',
-      location: 'Bengaluru, India',
-      stage: readiness.configured ? 'stage2-supabase-connected' : 'stage2-fallback-preview',
-      supabase: readiness,
-    });
-  });
-
-  app.use('/api', createOnboardingApiRouter(getOnboardingStore));
+async function startServer() {
+  const app = createApiApp();
 
   if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
@@ -83,7 +38,7 @@ async function createApp() {
   });
 }
 
-createApp().catch((err) => {
+startServer().catch((err) => {
   console.error('Failed to start server:', err);
   process.exit(1);
 });

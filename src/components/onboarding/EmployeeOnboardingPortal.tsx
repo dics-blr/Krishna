@@ -253,13 +253,21 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onReturnToAdmin}
-              className="px-4 py-2.5 rounded-lg bg-[#0B1F3A] text-white text-xs font-semibold hover:bg-[#132D52]"
-            >
-              Return to Home
-            </button>
+            {showAdminReturn ? (
+              <button
+                type="button"
+                onClick={onReturnToAdmin}
+                className="px-4 py-2.5 rounded-lg bg-[#0B1F3A] text-white text-xs font-semibold hover:bg-[#132D52]"
+              >
+                Return to HR Admin Portal
+              </button>
+            ) : (
+              <p className="text-xs text-slate-500 border-t border-slate-100 pt-4">
+                Please contact DICS Global HR at{' '}
+                <span className="font-semibold text-[#0B1F3A]">bangalore@dicsglobal.com</span> to
+                request a valid onboarding invitation link.
+              </p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

@@ -86,8 +86,7 @@ export default function App() {
       setAuthChecked(true);
 
       if (!resolvedUser) {
-        const formsList = await onboardingRepository.listForms();
-        setForms(formsList);
+        setForms([]);
         setInvitations([]);
         setSubmissions([]);
         return;
@@ -181,8 +180,13 @@ export default function App() {
       await client.auth.signOut();
     }
     setHrUser(null);
+    setForms([]);
     setInvitations([]);
     setSubmissions([]);
+    if (window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+    }
+    setRoute({ kind: 'admin', section: 'overview' });
   };
 
   const handleOpenEmployeePreview = () => {
@@ -240,6 +244,11 @@ export default function App() {
         serviceUnavailable={readiness ? !readiness.configured : false}
         onAuthenticated={(user) => {
           setHrUser(user);
+          const currentPath = window.location.pathname;
+          if (currentPath === '/login' || !['/', '/invitations', '/submissions', '/verification', '/forms'].includes(currentPath)) {
+            window.history.replaceState({}, '', '/');
+            setRoute({ kind: 'admin', section: 'overview' });
+          }
           void loadAdminData();
         }}
       />

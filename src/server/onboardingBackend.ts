@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DOCUMENT_UPLOAD_CATEGORIES, HR_FORMS_CATALOG } from '../shared/formsCatalog.ts';
 import {
@@ -253,19 +254,31 @@ export class SupabaseServerStore implements OnboardingDataStore {
       throw new HttpError(400, 'Invalid onboarding form identifier.', 'INVALID_FORM_ID');
     }
 
-    const templatePath = path.resolve(process.cwd(), 'public/assets/aistudio', desc.templateFile);
-    try {
-      const buf = await fs.readFile(templatePath);
-      const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-      this.templateCache.set(formId, bytes);
-      return bytes;
-    } catch {
-      throw new HttpError(
-        500,
-        `Original PDF template for ${desc.code} is unavailable on the server.`,
-        'TEMPLATE_MISSING'
-      );
+    const candidatePaths = [
+      path.resolve(process.cwd(), 'public/assets/aistudio', desc.templateFile),
+      path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        '../../public/assets/aistudio',
+        desc.templateFile
+      ),
+    ];
+
+    for (const templatePath of candidatePaths) {
+      try {
+        const buf = await fs.readFile(templatePath);
+        const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+        this.templateCache.set(formId, bytes);
+        return bytes;
+      } catch {
+        // Try next candidate path
+      }
     }
+
+    throw new HttpError(
+      500,
+      `Original PDF template for ${desc.code} is unavailable on the server.`,
+      'TEMPLATE_MISSING'
+    );
   }
 
   private async downloadPhotoAssetForDoc(

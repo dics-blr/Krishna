@@ -121,7 +121,7 @@ export const HrLoginView: React.FC<HrLoginViewProps> = ({
             <form onSubmit={handleSubmit} noValidate className="space-y-4">
               <div className="space-y-1.5">
                 <label htmlFor="hr-login-email" className="block text-xs font-semibold text-slate-700">
-                  Work Email Address
+                  Email Address
                 </label>
                 <input
                   id="hr-login-email"
@@ -176,7 +176,7 @@ export const HrLoginView: React.FC<HrLoginViewProps> = ({
                 className="w-full inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] disabled:opacity-60 text-white text-sm font-semibold transition-colors"
               >
                 <LogIn className="w-4 h-4" />
-                <span>{submitting ? 'Signing In...' : 'Sign In to HR Portal'}</span>
+                <span>{submitting ? 'Signing In...' : 'Sign In'}</span>
               </button>
             </form>
 
