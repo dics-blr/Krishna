@@ -432,6 +432,10 @@ export interface SupabaseReadinessInfo {
   storageBucketName: string;
   authEnforced?: boolean;
   authNotice: string;
+  publicAuthConfig?: {
+    url: string;
+    anonKey: string;
+  } | null;
 }
 
 export interface HrUserProfile {

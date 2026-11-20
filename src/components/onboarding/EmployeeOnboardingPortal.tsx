@@ -35,11 +35,13 @@ import { type OnboardingStepKey, ProgressTracker } from './ProgressTracker';
 
 interface EmployeeOnboardingPortalProps {
   token: string;
+  showAdminReturn?: boolean;
   onReturnToAdmin: () => void;
 }
 
 export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> = ({
   token,
+  showAdminReturn = false,
   onReturnToAdmin,
 }) => {
   const [invitation, setInvitation] = useState<OnboardingInvitation | null>(null);
@@ -214,14 +216,16 @@ export const EmployeeOnboardingPortal: React.FC<EmployeeOnboardingPortalProps> =
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={onReturnToAdmin}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-[#0B1F3A] bg-white hover:bg-slate-50 whitespace-nowrap shrink-0"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>HR Admin Portal</span>
-        </button>
+        {showAdminReturn && (
+          <button
+            type="button"
+            onClick={onReturnToAdmin}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-[#0B1F3A] bg-white hover:bg-slate-50 whitespace-nowrap shrink-0"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>HR Admin Portal</span>
+          </button>
+        )}
       </header>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">

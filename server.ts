@@ -17,15 +17,18 @@ const isProduction = process.env.NODE_ENV === 'production';
 function getSupabaseReadiness(): SupabaseReadinessInfo {
   const env = getServerSupabaseEnvStatus();
   const configured = env.fullyConfigured && env.anonKeyConfigured;
+  const publicUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim();
+  const publicAnonKey = (process.env.VITE_SUPABASE_ANON_KEY || '').trim();
   return {
     configured,
     mode: configured ? 'supabase_connected' : 'stage1_preview',
     databaseSchemaFile: 'supabase/migrations/',
     storageBucketName: env.storageBucket,
-    authEnforced: configured,
+    authEnforced: true,
     authNotice: configured
       ? 'Supabase Auth and server-side service-role persistence are configured. All /api/admin/* routes require a valid HR Admin session.'
-      : 'Supabase environment placeholders are empty. Running Stage 1 in-memory fallback on the frontend while protected backend API endpoints remain guarded.',
+      : 'HR Portal access requires an authorized HR Administrator login. Configure Supabase runtime secrets to enable live sign-in.',
+    publicAuthConfig: publicUrl && publicAnonKey ? { url: publicUrl, anonKey: publicAnonKey } : null,
   };
 }
 

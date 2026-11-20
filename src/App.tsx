@@ -81,22 +81,16 @@ export default function App() {
       const readinessInfo = await onboardingRepository.getReadiness();
       setReadiness(readinessInfo);
 
-      let resolvedUser: HrUserProfile | null = null;
-      if (readinessInfo.authEnforced) {
-        resolvedUser = await onboardingRepository.getCurrentHrUser();
-        setHrUser(resolvedUser);
-        setAuthChecked(true);
+      const resolvedUser = await onboardingRepository.getCurrentHrUser();
+      setHrUser(resolvedUser);
+      setAuthChecked(true);
 
-        if (!resolvedUser) {
-          const formsList = await onboardingRepository.listForms();
-          setForms(formsList);
-          setInvitations([]);
-          setSubmissions([]);
-          return;
-        }
-      } else {
-        setHrUser(null);
-        setAuthChecked(true);
+      if (!resolvedUser) {
+        const formsList = await onboardingRepository.listForms();
+        setForms(formsList);
+        setInvitations([]);
+        setSubmissions([]);
+        return;
       }
 
       const [formsList, invitationsList, submissionsList] = await Promise.all([
@@ -130,7 +124,7 @@ export default function App() {
     return () => {
       subscription.subscription.unsubscribe();
     };
-  }, [loadAdminData]);
+  }, [loadAdminData, readiness?.configured]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -212,6 +206,7 @@ export default function App() {
     return (
       <EmployeeOnboardingPortal
         token={route.token}
+        showAdminReturn={Boolean(hrUser)}
         onReturnToAdmin={() => navigateAdminSection('overview')}
       />
     );
@@ -238,10 +233,11 @@ export default function App() {
     );
   }
 
-  // Enforce HR Admin login when Supabase credentials & auth are active
-  if (authChecked && readiness?.authEnforced && !hrUser) {
+  // Fail-closed: always require an authenticated HR user before rendering HR Admin views
+  if (!hrUser) {
     return (
       <HrLoginView
+        serviceUnavailable={readiness ? !readiness.configured : false}
         onAuthenticated={(user) => {
           setHrUser(user);
           void loadAdminData();

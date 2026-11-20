@@ -42,7 +42,7 @@ import type {
   SupabaseReadinessInfo,
   UploadedDocumentItem,
 } from '../../shared/types';
-import { getSupabaseBrowserClient } from './browserClient';
+import { configureSupabasePublicEnv, getSupabaseBrowserClient } from './browserClient';
 import { getSupabaseConfig } from './config';
 
 export interface CreateInvitationInput {
@@ -657,9 +657,21 @@ export class SupabaseApiRepository implements OnboardingRepository {
   async getReadiness(): Promise<SupabaseReadinessInfo> {
     try {
       const health = await this.apiRequest<{ supabase: SupabaseReadinessInfo }>('/api/health');
-      return health.supabase;
+      if (health.supabase.publicAuthConfig) {
+        configureSupabasePublicEnv(
+          health.supabase.publicAuthConfig.url,
+          health.supabase.publicAuthConfig.anonKey
+        );
+      }
+      return {
+        ...health.supabase,
+        authEnforced: true,
+      };
     } catch {
-      return getSupabaseConfig().readiness;
+      return {
+        ...getSupabaseConfig().readiness,
+        authEnforced: true,
+      };
     }
   }
 
@@ -933,9 +945,7 @@ export class SupabaseApiRepository implements OnboardingRepository {
 }
 
 export function createOnboardingRepository(): OnboardingRepository {
-  return getSupabaseConfig().configured
-    ? new SupabaseApiRepository()
-    : new Stage1InMemoryRepository();
+  return new SupabaseApiRepository();
 }
 
 export const onboardingRepository: OnboardingRepository = createOnboardingRepository();

@@ -6,10 +6,14 @@ import type { HrUserProfile } from '../shared/types';
 import { LogoPlaceholder } from './LogoPlaceholder';
 
 interface HrLoginViewProps {
+  serviceUnavailable?: boolean;
   onAuthenticated: (hrUser: HrUserProfile) => void;
 }
 
-export const HrLoginView: React.FC<HrLoginViewProps> = ({ onAuthenticated }) => {
+export const HrLoginView: React.FC<HrLoginViewProps> = ({
+  serviceUnavailable = false,
+  onAuthenticated,
+}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -147,6 +151,15 @@ export const HrLoginView: React.FC<HrLoginViewProps> = ({ onAuthenticated }) => 
                   className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#EA580C] focus:border-[#EA580C]"
                 />
               </div>
+
+              {serviceUnavailable && !error && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs text-amber-900 leading-relaxed"
+                >
+                  HR Portal sign-in requires database authentication credentials in this environment. Please open the portal from your configured workspace or add the DICS Global authentication environment keys to sign in.
+                </div>
+              )}
 
               {error && (
                 <div

@@ -2,6 +2,24 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseConfig } from './config';
 
 let cachedBrowserClient: SupabaseClient | null | undefined;
+let runtimePublicConfig: { url: string; anonKey: string } | null = null;
+
+export function configureSupabasePublicEnv(url?: string | null, anonKey?: string | null): void {
+  const cleanUrl = (url ?? '').trim();
+  const cleanAnonKey = (anonKey ?? '').trim();
+  if (!cleanUrl || !cleanAnonKey) return;
+  if (
+    runtimePublicConfig?.url === cleanUrl &&
+    runtimePublicConfig?.anonKey === cleanAnonKey
+  ) {
+    return;
+  }
+  runtimePublicConfig = { url: cleanUrl, anonKey: cleanAnonKey };
+  // Reset cached client if it previously resolved to null or changed config
+  if (!cachedBrowserClient) {
+    cachedBrowserClient = undefined;
+  }
+}
 
 /**
  * Returns the browser-side Supabase client initialized strictly with the public
@@ -13,9 +31,10 @@ export function getSupabaseBrowserClient(): SupabaseClient | null {
     return cachedBrowserClient;
   }
 
-  const { url, anonKey, configured } = getSupabaseConfig();
-  if (!configured) {
-    cachedBrowserClient = null;
+  const buildConfig = getSupabaseConfig();
+  const url = buildConfig.url || runtimePublicConfig?.url || '';
+  const anonKey = buildConfig.anonKey || runtimePublicConfig?.anonKey || '';
+  if (!url || !anonKey) {
     return null;
   }
 

@@ -11,10 +11,10 @@ export function getSupabaseConfig() {
     mode: configured ? 'supabase_connected' : 'stage1_preview',
     databaseSchemaFile: 'supabase/migrations/',
     storageBucketName: 'dics-onboarding-documents',
-    authEnforced: configured,
+    authEnforced: true,
     authNotice: configured
       ? 'Supabase Auth is active for HR Admin access. Employee onboarding uses token-scoped backend endpoints.'
-      : 'Supabase environment placeholders are empty. Running Stage 1 in-memory fallback until credentials and database migrations are configured.',
+      : 'HR Portal access requires an authorized HR Administrator login.',
   };
 
   return {
