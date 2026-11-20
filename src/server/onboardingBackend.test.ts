@@ -79,6 +79,23 @@ class InMemorySupabaseMock {
         data: { signedUrl: `https://storage.test/download/${storagePath}` },
         error: null,
       }),
+      download: async (storagePath: string) => {
+        if (!this.storageObjects.has(storagePath)) {
+          return { data: null, error: { message: 'Not found' } };
+        }
+        return {
+          data: new Blob(
+            [
+              Buffer.from(
+                'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+                'base64'
+              ),
+            ],
+            { type: 'image/png' }
+          ),
+          error: null,
+        };
+      },
     }),
   };
 
@@ -283,6 +300,76 @@ test('SupabaseServerStore enforces hr_admin role in backend methods as defense i
       ),
     (err: unknown) => err instanceof HttpError && err.statusCode === 403
   );
+  await assert.rejects(
+    () =>
+      store.exportSubmissionFormPdf(
+        HR_REVIEWER_USER,
+        '00000000-0000-4000-8000-000000000099',
+        'form-01'
+      ),
+    (err: unknown) => err instanceof HttpError && err.statusCode === 403
+  );
+  await assert.rejects(
+    () =>
+      store.exportSubmissionFormsZip(
+        HR_REVIEWER_USER,
+        '00000000-0000-4000-8000-000000000099'
+      ),
+    (err: unknown) => err instanceof HttpError && err.statusCode === 403
+  );
+});
+
+test('SupabaseServerStore exports individual filled PDFs and 9-PDF ZIP for hr_admin with photo loading and clean audit logs', async () => {
+  const db = new InMemorySupabaseMock();
+  const store = new SupabaseServerStore(db.asSupabaseClient(), 'dics-onboarding-documents');
+
+  const created = await store.createInvitation(HR_ADMIN_USER, {
+    referenceLabel: 'TEST-EMPLOYEE-001',
+    department: 'Automation Engineering',
+    targetRole: 'Senior Engineer',
+    expiryDays: 14,
+  });
+
+  const signedPhoto = await store.createSignedDocumentUploadUrl(created.token, {
+    slotId: 'upload-slot-photograph',
+    fileName: 'passport-photo.png',
+    mimeType: 'image/png',
+    sizeBytes: 68,
+  });
+  db.storageObjects.set(signedPhoto.storagePath, { size: 68, contentType: 'image/png' });
+  await store.recordUploadedDocument(created.token, {
+    slotId: 'upload-slot-photograph',
+    fileName: 'passport-photo.png',
+    mimeType: 'image/png',
+    sizeBytes: 68,
+    storagePath: signedPhoto.storagePath,
+  });
+
+  await store.saveOfficeUseEntry(HR_ADMIN_USER, created.id, {
+    form01SelectionStatus: 'Selected',
+    form03EmpNo: 'DICS-EMP-001',
+    markVerified: true,
+  });
+
+  const singleExport = await store.exportSubmissionFormPdf(HR_ADMIN_USER, created.id, 'form-01');
+  assert.equal(Buffer.from(singleExport.pdfBytes.slice(0, 5)).toString('ascii'), '%PDF-');
+  assert.equal(singleExport.fileName, 'DICS-HR-01_Bio-Data_Form.pdf');
+
+  const zipExport = await store.exportSubmissionFormsZip(HR_ADMIN_USER, created.id);
+  assert.equal(Buffer.from(zipExport.zipBytes.slice(0, 2)).toString('ascii'), 'PK');
+  assert.equal(zipExport.fileName, 'DICS-Onboarding-Forms-TEST-EMPLOYEE-001.zip');
+
+  assert.ok(
+    db.tables.onboarding_audit_logs.some(
+      (l) => l.action === 'FORM_PDF_EXPORTED' && l.invitation_id === created.id
+    )
+  );
+  assert.ok(
+    db.tables.onboarding_audit_logs.some(
+      (l) => l.action === 'ALL_FORMS_ZIP_EXPORTED' && l.invitation_id === created.id
+    )
+  );
+  assert.equal(JSON.stringify(db.tables.onboarding_audit_logs).includes(created.token), false);
 });
 
 test('SupabaseServerStore stores SHA-256 token hashes only, returns raw token once, and never logs raw tokens', async () => {

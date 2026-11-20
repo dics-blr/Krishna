@@ -31,6 +31,16 @@ import type {
   SignedUploadUrlResponse,
   UploadedDocumentItem,
 } from '../shared/types.ts';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {
+  buildAllNineOriginalFormsZip,
+  buildFilledOriginalFormPdf,
+  buildOnboardingFormsZipFileName,
+  getOriginalFormPdfFileName,
+  ORIGINAL_FORM_PDF_BY_ID,
+  ORIGINAL_FORM_PDF_DESCRIPTORS,
+} from '../shared/onboardingPdfGenerator.ts';
 import { HttpError, type OnboardingDataStore } from './onboardingBackend.ts';
 import { createOnboardingApiRouter } from './onboardingRouter.ts';
 
@@ -357,6 +367,55 @@ class MockSupabaseDataStore implements OnboardingDataStore {
       }
     }
     throw new HttpError(404, 'Document not found');
+  }
+
+  async exportSubmissionFormPdf(
+    adminUser: HrUserProfile,
+    invitationId: string,
+    formId: AnyFormId
+  ): Promise<{ pdfBytes: Uint8Array; fileName: string }> {
+    const detail = await this.getSubmissionDetail(invitationId);
+    const desc = ORIGINAL_FORM_PDF_BY_ID[formId];
+    if (!desc) throw new HttpError(400, 'Invalid form id', 'INVALID_FORM_ID');
+    const tplBuf = await fs.readFile(path.resolve(process.cwd(), 'public/assets/aistudio', desc.templateFile));
+    const pdfBytes = await buildFilledOriginalFormPdf(formId, detail, new Uint8Array(tplBuf));
+    const fileName = getOriginalFormPdfFileName(formId);
+    this.auditLogs.push({
+      id: `audit-${generateRandomHex(4)}`,
+      invitationId: detail.invitation.id,
+      actorType: 'hr_admin',
+      actorId: adminUser.userId,
+      action: 'FORM_PDF_EXPORTED',
+      metadata: { formId, receiptCode: detail.invitation.receiptCode, fileName },
+      createdAt: new Date().toISOString(),
+    });
+    return { pdfBytes, fileName };
+  }
+
+  async exportSubmissionFormsZip(
+    adminUser: HrUserProfile,
+    invitationId: string
+  ): Promise<{ zipBytes: Uint8Array; fileName: string }> {
+    const detail = await this.getSubmissionDetail(invitationId);
+    const entries = await Promise.all(
+      ORIGINAL_FORM_PDF_DESCRIPTORS.map(async (desc) => {
+        const buf = await fs.readFile(path.resolve(process.cwd(), 'public/assets/aistudio', desc.templateFile));
+        return [desc.formId, new Uint8Array(buf)] as const;
+      })
+    );
+    const templates = Object.fromEntries(entries) as Record<AnyFormId, Uint8Array>;
+    const zipBytes = await buildAllNineOriginalFormsZip(detail, templates);
+    const fileName = buildOnboardingFormsZipFileName(detail);
+    this.auditLogs.push({
+      id: `audit-${generateRandomHex(4)}`,
+      invitationId: detail.invitation.id,
+      actorType: 'hr_admin',
+      actorId: adminUser.userId,
+      action: 'ALL_FORMS_ZIP_EXPORTED',
+      metadata: { receiptCode: detail.invitation.receiptCode, fileName },
+      createdAt: new Date().toISOString(),
+    });
+    return { zipBytes, fileName };
   }
 }
 
@@ -713,6 +772,38 @@ test('full Stage 2 onboarding API flow: HR Auth, invitation lifecycle, 9-form dr
     );
     assert.equal(officeRes.status, 200);
 
+    // 8b. HR Admin downloads individual original form PDF & all-9 ZIP; unauthenticated gets 401
+    const unauthPdfRes = await fetch(
+      `${srv.baseUrl}/api/admin/submissions/${invitation.id}/forms/form-01/pdf`
+    );
+    assert.equal(unauthPdfRes.status, 401);
+
+    const adminPdfRes = await fetch(
+      `${srv.baseUrl}/api/admin/submissions/${invitation.id}/forms/form-01/pdf`,
+      { headers: { Authorization: 'Bearer valid-hr-admin-jwt' } }
+    );
+    assert.equal(adminPdfRes.status, 200);
+    assert.equal(adminPdfRes.headers.get('content-type'), 'application/pdf');
+    assert.equal(
+      adminPdfRes.headers.get('content-disposition'),
+      'attachment; filename="DICS-HR-01_Bio-Data_Form.pdf"'
+    );
+    const pdfArrayBuffer = await adminPdfRes.arrayBuffer();
+    assert.equal(Buffer.from(pdfArrayBuffer.slice(0, 5)).toString('ascii'), '%PDF-');
+
+    const adminZipRes = await fetch(
+      `${srv.baseUrl}/api/admin/submissions/${invitation.id}/pdfs.zip`,
+      { headers: { Authorization: 'Bearer valid-hr-admin-jwt' } }
+    );
+    assert.equal(adminZipRes.status, 200);
+    assert.equal(adminZipRes.headers.get('content-type'), 'application/zip');
+    assert.match(
+      adminZipRes.headers.get('content-disposition') || '',
+      /^attachment; filename="DICS-Onboarding-Forms-/
+    );
+    const zipArrayBuffer = await adminZipRes.arrayBuffer();
+    assert.equal(Buffer.from(zipArrayBuffer.slice(0, 2)).toString('ascii'), 'PK');
+
     // 9. Expiring an invitation blocks subsequent employee access (403)
     const expireRes = await fetch(
       `${srv.baseUrl}/api/admin/invitations/${invitation.id}/expire`,
@@ -781,6 +872,16 @@ test('route-level middleware restricts hr_reviewer to read-only routes and block
       headers: reviewerHeaders,
     });
     assert.equal(downloadRes.status, 403);
+
+    const pdfExportRes = await fetch(`${srv.baseUrl}/api/admin/submissions/some-id/forms/form-01/pdf`, {
+      headers: reviewerHeaders,
+    });
+    assert.equal(pdfExportRes.status, 403);
+
+    const zipExportRes = await fetch(`${srv.baseUrl}/api/admin/submissions/some-id/pdfs.zip`, {
+      headers: reviewerHeaders,
+    });
+    assert.equal(zipExportRes.status, 403);
   } finally {
     await srv.close();
   }

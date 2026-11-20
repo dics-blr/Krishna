@@ -202,6 +202,43 @@ export function createOnboardingApiRouter(
   );
 
   router.get(
+    '/admin/submissions/:invitationId/forms/:formId/pdf',
+    requireHrAuth,
+    requireHrAdminOnly,
+    wrapAsync(async (req, res) => {
+      const store = requireStore();
+      const { pdfBytes, fileName } = await store.exportSubmissionFormPdf(
+        req.hrUser!,
+        req.params.invitationId,
+        req.params.formId as AnyFormId
+      );
+      const safeHeaderFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '-');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeHeaderFileName}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(200).send(Buffer.from(pdfBytes));
+    })
+  );
+
+  router.get(
+    '/admin/submissions/:invitationId/pdfs.zip',
+    requireHrAuth,
+    requireHrAdminOnly,
+    wrapAsync(async (req, res) => {
+      const store = requireStore();
+      const { zipBytes, fileName } = await store.exportSubmissionFormsZip(
+        req.hrUser!,
+        req.params.invitationId
+      );
+      const safeHeaderFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '-');
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeHeaderFileName}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(200).send(Buffer.from(zipBytes));
+    })
+  );
+
+  router.get(
     '/admin/documents/:documentId/download-url',
     requireHrAuth,
     requireHrAdminOnly,

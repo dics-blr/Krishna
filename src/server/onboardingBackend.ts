@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DOCUMENT_UPLOAD_CATEGORIES, HR_FORMS_CATALOG } from '../shared/formsCatalog.ts';
 import {
@@ -21,6 +23,17 @@ import {
   validateFormCompletion,
   validateInvitationInput,
 } from '../shared/onboardingLogic.ts';
+import {
+  buildAllNineOriginalFormsZip,
+  buildFilledOriginalFormPdf,
+  buildOnboardingFormsZipFileName,
+  getOriginalFormPdfFileName,
+  ORIGINAL_FORM_PDF_BY_ID,
+  ORIGINAL_FORM_PDF_DESCRIPTORS,
+  pickPhotographDocumentForForm,
+  type OnboardingPdfPhotoAssets,
+  type PhotoImageAsset,
+} from '../shared/onboardingPdfGenerator.ts';
 import type {
   AnyFormId,
   AuditLogEntry,
@@ -78,6 +91,15 @@ export interface OnboardingDataStore {
     adminUser: HrUserProfile,
     documentId: string
   ): Promise<SignedDownloadUrlResponse>;
+  exportSubmissionFormPdf(
+    adminUser: HrUserProfile,
+    invitationId: string,
+    formId: AnyFormId
+  ): Promise<{ pdfBytes: Uint8Array; fileName: string }>;
+  exportSubmissionFormsZip(
+    adminUser: HrUserProfile,
+    invitationId: string
+  ): Promise<{ zipBytes: Uint8Array; fileName: string }>;
   getSessionByToken(token: string): Promise<OnboardingSessionHydration>;
   saveFormResponse(
     token: string,
@@ -215,10 +237,98 @@ function hydrateResponses(rows: FormResponseRow[]): OnboardingFormResponses {
 export class SupabaseServerStore implements OnboardingDataStore {
   private readonly adminClient: SupabaseClient;
   private readonly storageBucket: string;
+  private readonly templateCache = new Map<AnyFormId, Uint8Array>();
 
   constructor(adminClient: SupabaseClient, storageBucket: string) {
     this.adminClient = adminClient;
     this.storageBucket = storageBucket;
+  }
+
+  private async loadOriginalTemplateBytes(formId: AnyFormId): Promise<Uint8Array> {
+    const cached = this.templateCache.get(formId);
+    if (cached) return cached;
+
+    const desc = ORIGINAL_FORM_PDF_BY_ID[formId];
+    if (!desc) {
+      throw new HttpError(400, 'Invalid onboarding form identifier.', 'INVALID_FORM_ID');
+    }
+
+    const templatePath = path.resolve(process.cwd(), 'public/assets/aistudio', desc.templateFile);
+    try {
+      const buf = await fs.readFile(templatePath);
+      const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+      this.templateCache.set(formId, bytes);
+      return bytes;
+    } catch {
+      throw new HttpError(
+        500,
+        `Original PDF template for ${desc.code} is unavailable on the server.`,
+        'TEMPLATE_MISSING'
+      );
+    }
+  }
+
+  private async downloadPhotoAssetForDoc(
+    invitationId: string,
+    doc: UploadedDocumentItem | null
+  ): Promise<PhotoImageAsset | null> {
+    if (!doc) return null;
+    try {
+      const { data: row, error } = await this.adminClient
+        .from('onboarding_documents')
+        .select('storage_bucket, storage_path, mime_type')
+        .eq('id', doc.id)
+        .eq('invitation_id', invitationId)
+        .maybeSingle();
+
+      if (error || !row || !row.storage_path) return null;
+
+      const bucket = row.storage_bucket || this.storageBucket;
+      const storageFrom = this.adminClient.storage.from(bucket) as unknown as {
+        download?: (storagePath: string) => Promise<{ data: Blob | Uint8Array | null; error: unknown }>;
+      };
+      if (typeof storageFrom.download !== 'function') return null;
+
+      const { data: downloaded, error: dlErr } = await storageFrom.download(row.storage_path);
+      if (dlErr || !downloaded) return null;
+
+      let bytes: Uint8Array | null = null;
+      if (downloaded instanceof Uint8Array) {
+        bytes = downloaded;
+      } else if (typeof (downloaded as Blob).arrayBuffer === 'function') {
+        bytes = new Uint8Array(await (downloaded as Blob).arrayBuffer());
+      }
+      if (!bytes || bytes.length === 0) return null;
+
+      return {
+        bytes,
+        mimeType: row.mime_type || doc.mimeType,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async resolvePhotoAssetsForSubmission(
+    detail: HrSubmissionDetail
+  ): Promise<OnboardingPdfPhotoAssets> {
+    const form01Doc = pickPhotographDocumentForForm(
+      detail.uploadedDocuments,
+      detail.formResponses['form-01'].photoFileName
+    );
+    const form06Doc = pickPhotographDocumentForForm(detail.uploadedDocuments, '');
+
+    if (!form01Doc && !form06Doc) {
+      return {};
+    }
+
+    const form01Photo = await this.downloadPhotoAssetForDoc(detail.invitation.id, form01Doc);
+    const form06Photo =
+      form06Doc && form06Doc.id === form01Doc?.id
+        ? form01Photo
+        : await this.downloadPhotoAssetForDoc(detail.invitation.id, form06Doc);
+
+    return { form01Photo, form06Photo };
   }
 
   private async writeAuditLog(entry: {
@@ -1162,5 +1272,80 @@ export class SupabaseServerStore implements OnboardingDataStore {
       expiresInSeconds,
       fileName: doc.file_name,
     };
+  }
+
+  async exportSubmissionFormPdf(
+    adminUser: HrUserProfile,
+    invitationId: string,
+    formId: AnyFormId
+  ): Promise<{ pdfBytes: Uint8Array; fileName: string }> {
+    if (adminUser.role !== 'hr_admin') {
+      throw new HttpError(
+        403,
+        'Only HR Admins are authorized to export individual onboarding form PDFs.',
+        'FORBIDDEN'
+      );
+    }
+    if (!VALID_FORM_IDS.has(formId)) {
+      throw new HttpError(400, 'Invalid onboarding form identifier.', 'INVALID_FORM_ID');
+    }
+
+    const detail = await this.getSubmissionDetail(invitationId);
+    const templateBytes = await this.loadOriginalTemplateBytes(formId);
+    const needsPhoto = formId === 'form-01' || formId === 'form-06';
+    const photoAssets = needsPhoto ? await this.resolvePhotoAssetsForSubmission(detail) : undefined;
+    const pdfBytes = await buildFilledOriginalFormPdf(formId, detail, templateBytes, photoAssets);
+    const fileName = getOriginalFormPdfFileName(formId);
+
+    await this.writeAuditLog({
+      invitationId: detail.invitation.id,
+      actorType: 'hr_admin',
+      actorId: adminUser.userId,
+      action: 'FORM_PDF_EXPORTED',
+      metadata: {
+        formId,
+        receiptCode: detail.invitation.receiptCode,
+        fileName,
+      },
+    });
+
+    return { pdfBytes, fileName };
+  }
+
+  async exportSubmissionFormsZip(
+    adminUser: HrUserProfile,
+    invitationId: string
+  ): Promise<{ zipBytes: Uint8Array; fileName: string }> {
+    if (adminUser.role !== 'hr_admin') {
+      throw new HttpError(
+        403,
+        'Only HR Admins are authorized to export the complete onboarding forms ZIP archive.',
+        'FORBIDDEN'
+      );
+    }
+
+    const detail = await this.getSubmissionDetail(invitationId);
+    const templateEntries = await Promise.all(
+      ORIGINAL_FORM_PDF_DESCRIPTORS.map(
+        async (desc) => [desc.formId, await this.loadOriginalTemplateBytes(desc.formId)] as const
+      )
+    );
+    const templatesByFormId = Object.fromEntries(templateEntries) as Record<AnyFormId, Uint8Array>;
+    const photoAssets = await this.resolvePhotoAssetsForSubmission(detail);
+    const zipBytes = await buildAllNineOriginalFormsZip(detail, templatesByFormId, photoAssets);
+    const fileName = buildOnboardingFormsZipFileName(detail);
+
+    await this.writeAuditLog({
+      invitationId: detail.invitation.id,
+      actorType: 'hr_admin',
+      actorId: adminUser.userId,
+      action: 'ALL_FORMS_ZIP_EXPORTED',
+      metadata: {
+        receiptCode: detail.invitation.receiptCode,
+        fileName,
+      },
+    });
+
+    return { zipBytes, fileName };
   }
 }

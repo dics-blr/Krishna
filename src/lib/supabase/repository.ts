@@ -14,6 +14,17 @@ import {
   validateDocumentFile,
   validateInvitationInput,
 } from '../../shared/onboardingLogic';
+import {
+  buildAllNineOriginalFormsZip,
+  buildFilledOriginalFormPdf,
+  buildOnboardingFormsZipFileName,
+  getOriginalFormPdfFileName,
+  ORIGINAL_FORM_PDF_BY_ID,
+  ORIGINAL_FORM_PDF_DESCRIPTORS,
+  pickPhotographDocumentForForm,
+  type OnboardingPdfPhotoAssets,
+  type PhotoImageAsset,
+} from '../../shared/onboardingPdfGenerator';
 import type {
   AnyFormId,
   AuditLogEntry,
@@ -82,6 +93,11 @@ export interface OnboardingRepository {
     patch: Partial<HrOfficeUseEntry> & { markVerified?: boolean }
   ): Promise<HrOfficeUseEntry>;
   getDocumentDownloadUrl(documentId: string): Promise<SignedDownloadUrlResponse>;
+  exportSubmissionFormPdf(
+    invitationId: string,
+    formId: AnyFormId
+  ): Promise<{ blob: Blob; fileName: string }>;
+  exportSubmissionAllFormsZip(invitationId: string): Promise<{ blob: Blob; fileName: string }>;
 }
 
 /**
@@ -96,6 +112,8 @@ export class Stage1InMemoryRepository implements OnboardingRepository {
   private declarationsByToken = new Map<string, boolean>();
   private documentsByToken = new Map<string, UploadedDocumentItem[]>();
   private previewObjectUrls = new Map<string, string>();
+  private previewPhotoAssets = new Map<string, PhotoImageAsset>();
+  private templateCache = new Map<AnyFormId, Uint8Array>();
   private officeUseByInvitationId = new Map<string, HrOfficeUseEntry>();
   private auditLogsByInvitationId = new Map<string, AuditLogEntry[]>();
 
@@ -323,6 +341,22 @@ export class Stage1InMemoryRepository implements OnboardingRepository {
       }
     }
 
+    const lowerMime = file.type.toLowerCase();
+    if (
+      slotId === 'upload-slot-photograph' &&
+      (lowerMime === 'image/jpeg' || lowerMime === 'image/jpg' || lowerMime === 'image/png') &&
+      typeof file.arrayBuffer === 'function'
+    ) {
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        if (bytes.length > 0) {
+          this.previewPhotoAssets.set(doc.id, { bytes, mimeType: file.type });
+        }
+      } catch {
+        // Ignore if file bytes cannot be read in preview
+      }
+    }
+
     this.appendAudit(invitation.id, 'employee', `employee:${invitation.id}`, 'DOCUMENT_UPLOADED', {
       fileName: doc.fileName,
       slotId: doc.slotId,
@@ -479,6 +513,82 @@ export class Stage1InMemoryRepository implements OnboardingRepository {
       }
     }
     throw new Error('Document record not found.');
+  }
+
+  private async fetchOriginalTemplateBytes(formId: AnyFormId): Promise<Uint8Array> {
+    const cached = this.templateCache.get(formId);
+    if (cached) return cached;
+    const desc = ORIGINAL_FORM_PDF_BY_ID[formId];
+    if (!desc) {
+      throw new Error(`Unknown form template: ${formId}`);
+    }
+    const res = await fetch(desc.templateAssetPath);
+    if (!res.ok) {
+      throw new Error(`Failed to load original PDF template (${desc.code}).`);
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    this.templateCache.set(formId, bytes);
+    return bytes;
+  }
+
+  private resolvePreviewPhotos(detail: HrSubmissionDetail): OnboardingPdfPhotoAssets {
+    const f1Doc = pickPhotographDocumentForForm(
+      detail.uploadedDocuments,
+      detail.formResponses['form-01'].photoFileName
+    );
+    const f6Doc = pickPhotographDocumentForForm(detail.uploadedDocuments, '');
+    return {
+      form01Photo: f1Doc ? this.previewPhotoAssets.get(f1Doc.id) ?? null : null,
+      form06Photo: f6Doc ? this.previewPhotoAssets.get(f6Doc.id) ?? null : null,
+    };
+  }
+
+  async exportSubmissionFormPdf(
+    invitationId: string,
+    formId: AnyFormId
+  ): Promise<{ blob: Blob; fileName: string }> {
+    const detail = await this.getSubmissionDetail(invitationId);
+    const templateBytes = await this.fetchOriginalTemplateBytes(formId);
+    const pdfBytes = await buildFilledOriginalFormPdf(
+      formId,
+      detail,
+      templateBytes,
+      this.resolvePreviewPhotos(detail)
+    );
+    const fileName = getOriginalFormPdfFileName(formId);
+    this.appendAudit(invitationId, 'hr_admin', 'stage1-preview', 'FORM_PDF_EXPORTED', {
+      formId,
+      fileName,
+    });
+    return {
+      blob: new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' }),
+      fileName,
+    };
+  }
+
+  async exportSubmissionAllFormsZip(
+    invitationId: string
+  ): Promise<{ blob: Blob; fileName: string }> {
+    const detail = await this.getSubmissionDetail(invitationId);
+    const entries = await Promise.all(
+      ORIGINAL_FORM_PDF_DESCRIPTORS.map(
+        async (desc) => [desc.formId, await this.fetchOriginalTemplateBytes(desc.formId)] as const
+      )
+    );
+    const templatesByFormId = Object.fromEntries(entries) as Record<AnyFormId, Uint8Array>;
+    const zipBytes = await buildAllNineOriginalFormsZip(
+      detail,
+      templatesByFormId,
+      this.resolvePreviewPhotos(detail)
+    );
+    const fileName = buildOnboardingFormsZipFileName(detail);
+    this.appendAudit(invitationId, 'hr_admin', 'stage1-preview', 'ALL_FORMS_ZIP_EXPORTED', {
+      fileName,
+    });
+    return {
+      blob: new Blob([new Uint8Array(zipBytes)], { type: 'application/zip' }),
+      fileName,
+    };
   }
 }
 
@@ -760,6 +870,64 @@ export class SupabaseApiRepository implements OnboardingRepository {
     return this.apiRequest<SignedDownloadUrlResponse>(
       `/api/admin/documents/${encodeURIComponent(documentId)}/download-url`,
       { requireAuth: true }
+    );
+  }
+
+  private async fetchBinaryExport(
+    path: string,
+    fallbackFileName: string,
+    defaultErrorPrefix: string
+  ): Promise<{ blob: Blob; fileName: string }> {
+    const token = await this.resolveAccessToken();
+    if (!token) {
+      throw new Error('HR Admin sign-in is required to export onboarding forms.');
+    }
+
+    const res = await fetch(path, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      let errMessage = `${defaultErrorPrefix} failed with status ${res.status}.`;
+      try {
+        const parsed = (await res.json()) as { error?: string };
+        if (typeof parsed.error === 'string' && parsed.error.length > 0) {
+          errMessage = parsed.error;
+        }
+      } catch {
+        // Ignore JSON parse error for non-JSON error responses
+      }
+      throw new Error(errMessage);
+    }
+
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    const fileName = match?.[1] || fallbackFileName;
+    const blob = await res.blob();
+    return { blob, fileName };
+  }
+
+  async exportSubmissionFormPdf(
+    invitationId: string,
+    formId: AnyFormId
+  ): Promise<{ blob: Blob; fileName: string }> {
+    return this.fetchBinaryExport(
+      `/api/admin/submissions/${encodeURIComponent(invitationId)}/forms/${encodeURIComponent(formId)}/pdf`,
+      getOriginalFormPdfFileName(formId),
+      'Form PDF export'
+    );
+  }
+
+  async exportSubmissionAllFormsZip(
+    invitationId: string
+  ): Promise<{ blob: Blob; fileName: string }> {
+    return this.fetchBinaryExport(
+      `/api/admin/submissions/${encodeURIComponent(invitationId)}/pdfs.zip`,
+      `DICS-Onboarding-Forms-${invitationId}.zip`,
+      'Onboarding ZIP export'
     );
   }
 }

@@ -284,6 +284,8 @@ export default function App() {
 
       <SubmissionDetailModal
         invitationId={inspectingInvitationId}
+        hrUser={hrUser}
+        authEnforced={Boolean(readiness?.authEnforced)}
         onClose={() => setInspectingInvitationId(null)}
         onUpdated={loadAdminData}
       />

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   Download,
+  FileDown,
   FileText,
   Save,
   ShieldCheck,
@@ -10,16 +11,25 @@ import {
 import { onboardingRepository } from '../lib/supabase/repository';
 import { HR_FORMS_CATALOG } from '../shared/formsCatalog';
 import { formatBytes, getFormResponseSummary, isFormSlotCompleted } from '../shared/onboardingLogic';
-import type { AnyFormId, HrOfficeUseEntry, HrSubmissionDetail } from '../shared/types';
+import type {
+  AnyFormId,
+  HrOfficeUseEntry,
+  HrSubmissionDetail,
+  HrUserProfile,
+} from '../shared/types';
 
 interface SubmissionDetailModalProps {
   invitationId: string | null;
+  hrUser?: HrUserProfile | null;
+  authEnforced?: boolean;
   onClose: () => void;
   onUpdated: () => Promise<void> | void;
 }
 
 export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
   invitationId,
+  hrUser = null,
+  authEnforced = false,
   onClose,
   onUpdated,
 }) => {
@@ -27,6 +37,8 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
   const [officeUse, setOfficeUse] = useState<HrOfficeUseEntry | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [exportingZip, setExportingZip] = useState(false);
+  const [exportingFormId, setExportingFormId] = useState<AnyFormId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -110,6 +122,54 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
     }
   };
 
+  const canExportPdf = !authEnforced || hrUser?.role === 'hr_admin';
+
+  const triggerBlobDownload = (blob: Blob, fileName: string) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+  };
+
+  const handleExportAllZip = async () => {
+    if (!detail || !canExportPdf) return;
+    setExportingZip(true);
+    setError(null);
+    try {
+      const { blob, fileName } = await onboardingRepository.exportSubmissionAllFormsZip(
+        detail.invitation.id
+      );
+      triggerBlobDownload(blob, fileName);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Unable to generate all 9 onboarding forms ZIP.'
+      );
+    } finally {
+      setExportingZip(false);
+    }
+  };
+
+  const handleExportSingleFormPdf = async (formId: AnyFormId) => {
+    if (!detail || !canExportPdf) return;
+    setExportingFormId(formId);
+    setError(null);
+    try {
+      const { blob, fileName } = await onboardingRepository.exportSubmissionFormPdf(
+        detail.invitation.id,
+        formId
+      );
+      triggerBlobDownload(blob, fileName);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to generate form PDF.');
+    } finally {
+      setExportingFormId(null);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -118,8 +178,8 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
       className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4"
     >
       <div className="bg-white rounded-lg border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-lg">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-4">
-          <div className="min-w-0">
+        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-0">
             <h2 id="submission-detail-title" className="text-lg font-semibold text-[#0B1F3A] truncate">
               {detail ? `${detail.invitation.referenceLabel} · Packet Review` : 'Submission Review'}
             </h2>
@@ -127,17 +187,38 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
               <p className="text-xs text-slate-500 font-mono truncate">
                 {detail.invitation.department} · {detail.invitation.targetRole} · State:{' '}
                 {detail.invitation.submissionState}
+                {detail.invitation.receiptCode ? ` · ${detail.invitation.receiptCode}` : ''}
               </p>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close packet review dialog"
-            className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {detail && canExportPdf && (
+              <button
+                type="button"
+                onClick={handleExportAllZip}
+                disabled={exportingZip || exportingFormId !== null}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#0B1F3A] hover:bg-[#132D52] disabled:opacity-60 text-xs font-medium text-white transition-colors"
+              >
+                <FileDown className="w-3.5 h-3.5" />
+                <span>
+                  {exportingZip ? 'Generating ZIP...' : 'Download All 9 PDFs (ZIP)'}
+                </span>
+              </button>
+            )}
+            {detail && !canExportPdf && (
+              <span className="px-2.5 py-1 rounded border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-500">
+                PDF Export Restricted to HR Admin
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close packet review dialog"
+              className="p-2 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -173,24 +254,39 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
                     const formId = form.id as AnyFormId;
                     const done = isFormSlotCompleted(formId, detail.formResponses);
                     const summary = getFormResponseSummary(formId, detail.formResponses);
+                    const isExportingThisForm = exportingFormId === formId;
                     return (
-                      <div key={form.id} className="px-4 py-2.5 flex items-center justify-between gap-4 text-xs">
-                        <div className="min-w-0">
-                          <span className="font-mono font-semibold text-[#1D4ED8] mr-2">
+                      <div key={form.id} className="px-4 py-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-xs">
+                        <div className="w-full sm:w-auto min-w-0 sm:flex-1">
+                          <span className="font-mono font-semibold text-[#1D4ED8] whitespace-nowrap mr-2">
                             {form.code}
                           </span>
                           <span className="font-medium text-[#0B1F3A]">{form.shortTitle}</span>
                           <p className="text-slate-500 truncate mt-0.5">{summary}</p>
                         </div>
-                        <span
-                          className={`px-2 py-0.5 rounded border font-medium shrink-0 ${
-                            done
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 bg-slate-50 text-slate-600'
-                          }`}
-                        >
-                          {done ? 'Completed' : 'Pending'}
-                        </span>
+                        <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                          <span
+                            className={`px-2 py-0.5 rounded border font-medium ${
+                              done
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-slate-200 bg-slate-50 text-slate-600'
+                            }`}
+                          >
+                            {done ? 'Completed' : 'Pending'}
+                          </span>
+                          {canExportPdf && (
+                            <button
+                              type="button"
+                              aria-label={`Download ${form.code} PDF`}
+                              disabled={exportingZip || exportingFormId !== null}
+                              onClick={() => handleExportSingleFormPdf(formId)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-60 text-xs font-medium text-slate-700"
+                            >
+                              <FileDown className="w-3.5 h-3.5" />
+                              <span>{isExportingThisForm ? 'Generating...' : 'Download PDF'}</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -209,12 +305,12 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
                 ) : (
                   <div className="divide-y divide-slate-200 rounded-md border border-slate-200">
                     {detail.uploadedDocuments.map((doc) => (
-                      <div key={doc.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-xs">
-                        <div className="flex items-center gap-2.5 min-w-0">
+                      <div key={doc.id} className="px-4 py-3 sm:py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0 w-full sm:w-auto">
                           <FileText className="w-4 h-4 text-[#1D4ED8] shrink-0" />
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className="font-medium text-[#0B1F3A] truncate">{doc.fileName}</p>
-                            <p className="text-slate-500">
+                            <p className="text-slate-500 truncate">
                               {doc.slotLabel} · {formatBytes(doc.sizeBytes)}
                             </p>
                           </div>
@@ -222,7 +318,7 @@ export const SubmissionDetailModal: React.FC<SubmissionDetailModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDownloadDocument(doc.id)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 shrink-0"
+                          className="self-start sm:self-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 shrink-0"
                         >
                           <Download className="w-3.5 h-3.5" />
                           <span>Download</span>
