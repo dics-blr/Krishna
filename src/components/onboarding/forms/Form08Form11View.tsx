@@ -498,7 +498,7 @@ export const Form08Form11View: React.FC<Form08Form11ViewProps> = ({
             type="checkbox"
             checked={data.undertakingAccepted}
             onChange={(e) => onChange({ undertakingAccepted: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
           />
           <span className="text-xs font-medium text-[#0B1F3A]">
             I accept and confirm clauses (1) to (4) of the UNDERTAKING above.{' '}

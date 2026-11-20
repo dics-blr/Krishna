@@ -1,15 +1,22 @@
 import React from 'react';
 import {
   ArrowRight,
-  Database,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  Clock,
   Eye,
+  FileCheck2,
   FileText,
-  Info,
-  Link2,
-  ShieldAlert,
+  Mail,
   ShieldCheck,
+  User,
+  UserPlus,
 } from 'lucide-react';
-import { getEffectiveInvitationStatus } from '../shared/onboardingLogic';
+import {
+  getEffectiveInvitationStatus,
+  getFriendlySubmissionStatus,
+} from '../shared/onboardingLogic';
 import type {
   AdminNavSection,
   HRFormDefinition,
@@ -29,299 +36,397 @@ interface AdminDashboardViewProps {
   onInspectSubmission: (invitationId: string) => void;
 }
 
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso.slice(0, 10);
+  return parsed.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function statusPillClasses(tone: 'neutral' | 'warning' | 'info' | 'success'): string {
+  switch (tone) {
+    case 'success':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-800';
+    case 'info':
+      return 'border-orange-200 bg-orange-50 text-[#C2410C]';
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-800';
+    case 'neutral':
+    default:
+      return 'border-slate-200 bg-slate-100 text-slate-700';
+  }
+}
+
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
-  forms,
   invitations,
   submissions,
-  readiness,
   loading,
   onNavigateSection,
-  onOpenOnboardingLink,
   onInspectSubmission,
 }) => {
-  const sampleInvite = invitations.find(
-    (inv) => getEffectiveInvitationStatus(inv) === 'active' && Boolean(inv.token && inv.invitePath)
-  );
-  const completedSubmissionsCount = submissions.filter(
+  const totalInvitations = invitations.length;
+
+  const pendingSubmissionsCount = submissions.filter(
+    (s) =>
+      s.invitation.submissionState === 'not_submitted' ||
+      s.invitation.submissionState === 'in_progress'
+  ).length;
+
+  const submittedApplicationsCount = submissions.filter(
     (s) =>
       s.invitation.submissionState === 'submitted' ||
-      s.invitation.submissionState === 'hr_verified' ||
+      s.invitation.submissionState === 'preview_completed' ||
+      s.invitation.submissionState === 'hr_verified'
+  ).length;
+
+  const pendingVerificationCount = submissions.filter(
+    (s) =>
+      s.invitation.submissionState === 'submitted' ||
       s.invitation.submissionState === 'preview_completed'
   ).length;
-  const isSupabaseConnected = Boolean(readiness?.configured);
+
+  const verifiedEmployeesCount = submissions.filter(
+    (s) => s.invitation.submissionState === 'hr_verified'
+  ).length;
+
+  const activeInvitationsCount = invitations.filter(
+    (inv) => getEffectiveInvitationStatus(inv) === 'active'
+  ).length;
+
+  const summaryCards = [
+    {
+      label: 'Total Invitations',
+      value: totalInvitations,
+      subtitle: `${activeInvitationsCount} active`,
+      icon: Mail,
+      accentBg: 'bg-slate-100 text-[#0B1F3A]',
+      onClick: () => onNavigateSection('invitations'),
+    },
+    {
+      label: 'Pending Submissions',
+      value: pendingSubmissionsCount,
+      subtitle: 'In progress or not started',
+      icon: Clock,
+      accentBg: 'bg-amber-50 text-amber-700',
+      onClick: () => onNavigateSection('submissions'),
+    },
+    {
+      label: 'Submitted Applications',
+      value: submittedApplicationsCount,
+      subtitle: 'Completed by employees',
+      icon: FileText,
+      accentBg: 'bg-orange-50 text-[#C2410C]',
+      onClick: () => onNavigateSection('submissions'),
+    },
+    {
+      label: 'Pending HR Verification',
+      value: pendingVerificationCount,
+      subtitle: 'Awaiting HR sign-off',
+      icon: ShieldCheck,
+      accentBg: 'bg-orange-50 text-[#EA580C]',
+      onClick: () => onNavigateSection('verification'),
+    },
+    {
+      label: 'Verified Employees',
+      value: verifiedEmployeesCount,
+      subtitle: 'Approved & finalized',
+      icon: CheckCircle2,
+      accentBg: 'bg-emerald-50 text-emerald-700',
+      onClick: () => onNavigateSection('verification'),
+    },
+  ];
+
+  // Build real chronological recent activity from invitations and submissions
+  const recentActivity = [...submissions]
+    .map((sub) => {
+      const state = sub.invitation.submissionState;
+      const name = sub.applicantName || sub.invitation.referenceLabel;
+      const timestamp = sub.invitation.submittedAt || sub.invitation.createdAt;
+      let headline = `Invitation sent to ${name}`;
+      let detail = `${sub.invitation.department} · ${sub.invitation.targetRole}`;
+
+      if (state === 'hr_verified') {
+        headline = `${name} verified by HR`;
+        detail = `${sub.invitation.department} · Onboarding completed`;
+      } else if (state === 'submitted' || state === 'preview_completed') {
+        headline = `${name} submitted onboarding forms`;
+        detail = `${sub.completedFormsCount} of 9 forms · Ready for HR verification`;
+      } else if (state === 'in_progress') {
+        headline = `${name} started onboarding`;
+        detail = `${sub.completedFormsCount} of 9 forms completed`;
+      }
+
+      return {
+        id: sub.invitation.id,
+        headline,
+        detail,
+        timestamp,
+        state,
+      };
+    })
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+    .slice(0, 6);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 pb-6">
-        <div className="space-y-1.5 max-w-2xl">
-          <p className="text-xs font-medium text-[#1D4ED8]">
-            Digital Instruments &amp; Control Systems (DICS Global) · Bengaluru, India
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-[#C2410C]">
+            Digital Instruments &amp; Control Systems · Bengaluru
           </p>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-[#0B1F3A] tracking-tight text-balance">
-            HR Onboarding Administration
+          <h1 className="text-2xl font-semibold text-[#0B1F3A] tracking-tight">
+            HR Onboarding Dashboard
           </h1>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            Manage nine original DICS Global onboarding forms, issue registration-free candidate
-            invitation links, review submitted packets, and complete HR Office-Use verification.
+          <p className="text-sm text-slate-600">
+            Track new employee invitations, application progress, and HR verification at a glance.
           </p>
         </div>
 
-        {sampleInvite && (
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={() => onOpenOnboardingLink(sampleInvite.token)}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#0B1F3A] hover:bg-[#132D52] text-white text-sm font-medium transition-colors whitespace-nowrap shrink-0"
+            onClick={() => onNavigateSection('verification')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-[#0B1F3A] transition-colors whitespace-nowrap"
           >
-            <span>Launch Active Onboarding Link</span>
-            <ArrowRight className="w-4 h-4" />
+            <ShieldCheck className="w-4 h-4 text-[#C2410C]" />
+            <span>Review Pending ({pendingVerificationCount})</span>
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => onNavigateSection('invitations')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold transition-colors whitespace-nowrap"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Invite Employee</span>
+          </button>
+        </div>
       </div>
 
-      {/* Environment & Integration Status Notice */}
-      <section
-        aria-label="Portal integration status"
-        className="rounded-lg border border-slate-200 bg-slate-50 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start gap-3.5"
-      >
-        <Info className="w-5 h-5 text-[#1D4ED8] shrink-0 mt-0.5" />
-        <div className="space-y-1 text-sm text-slate-700">
-          <p className="font-medium text-[#0B1F3A]">
-            {isSupabaseConnected
-              ? 'Supabase Connected — Live Database, Auth & Private Storage Active'
-              : 'Development Fallback Active — Supabase Credentials & Migrations Not Yet Configured'}
-          </p>
-          <p className="text-slate-600 leading-relaxed">
-            {isSupabaseConnected
-              ? 'Invitations, employee form drafts, signed document uploads, and HR Office-Use verification entries persist to PostgreSQL and private storage.'
-              : 'All nine PDF forms (DICS-HR-01 through DICS-HR-09) and Stage 2 SQL migrations + protected API routes are ready. Because Supabase environment placeholders are currently empty, this browser preview uses the Stage 1 in-memory fallback.'}
-          </p>
-        </div>
+      {/* 5 Summary Metric Cards */}
+      <section aria-label="Onboarding summary metrics" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <button
+              key={card.label}
+              type="button"
+              onClick={card.onClick}
+              className="text-left rounded-xl border border-slate-200 bg-white p-5 hover:border-[#EA580C]/60 transition-colors space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-600">{card.label}</span>
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${card.accentBg}`}>
+                  <Icon className="w-4 h-4" />
+                </span>
+              </div>
+              <div className="text-3xl font-bold text-[#0B1F3A] tabular-nums">
+                {loading ? '—' : card.value}
+              </div>
+              <p className="text-xs text-slate-500">{card.subtitle}</p>
+            </button>
+          );
+        })}
       </section>
 
-      {/* 4 KPI Summary Cells */}
-      <section aria-label="Portal readiness metrics" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Digitized HR Forms</span>
-            <FileText className="w-4 h-4 text-[#1D4ED8]" />
-          </div>
-          <div className="text-2xl font-semibold text-[#0B1F3A] font-mono tabular-nums">
-            {loading ? '—' : `${forms.filter((f) => f.mappingStatus === 'mapped').length} / 9`}
-          </div>
-          <p className="text-xs text-slate-600">
-            Mapped from the 9 original DICS Global PDFs
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Issued Invitations</span>
-            <Link2 className="w-4 h-4 text-[#1D4ED8]" />
-          </div>
-          <div className="text-2xl font-semibold text-[#0B1F3A] font-mono tabular-nums">
-            {loading ? '—' : invitations.length}
-          </div>
-          <p className="text-xs text-slate-600">
-            Token-accessible without employee registration
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>{isSupabaseConnected ? 'Completed Submissions' : 'Session Submissions'}</span>
-            {isSupabaseConnected ? (
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            ) : (
-              <ShieldAlert className="w-4 h-4 text-slate-400" />
-            )}
-          </div>
-          <div className="text-2xl font-semibold text-[#0B1F3A] font-mono tabular-nums">
-            {loading ? '—' : completedSubmissionsCount}
-          </div>
-          <p className="text-xs text-slate-600">
-            {isSupabaseConnected
-              ? 'Submitted packets ready for HR Office-Use verification'
-              : 'In-memory session submissions (not yet persisted to DB)'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Supabase Integration</span>
-            <Database className="w-4 h-4 text-[#1D4ED8]" />
-          </div>
-          <div className="text-lg font-semibold text-[#0B1F3A]">
-            {isSupabaseConnected ? 'Connected' : 'Fallback (Unconfigured)'}
-          </div>
-          <p className="text-xs text-slate-600 font-mono truncate">
-            {readiness?.storageBucketName || 'dics-onboarding-documents'}
-          </p>
-        </div>
-      </section>
-
-      {/* Two-Column Operational Overview */}
+      {/* Main Two-Column Section: Employee Status Overview & Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Nine Form Modules Summary */}
-        <section className="lg:col-span-7 rounded-lg border border-slate-200 bg-white overflow-hidden">
+        {/* Employee Status Overview */}
+        <section className="lg:col-span-8 rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-4">
             <div>
               <h2 className="text-base font-semibold text-[#0B1F3A]">
-                Nine Original HR Form Modules
+                Employee Status Overview
               </h2>
               <p className="text-xs text-slate-500">
-                Mapped from the nine original DICS Global onboarding PDF documents
+                Latest candidate onboarding progress and verification status
               </p>
             </div>
             <button
               type="button"
-              onClick={() => onNavigateSection('forms')}
-              className="text-xs font-medium text-[#1D4ED8] hover:underline whitespace-nowrap shrink-0"
+              onClick={() => onNavigateSection('submissions')}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[#C2410C] hover:text-[#9A3412] whitespace-nowrap shrink-0"
             >
-              Inspect All 9 Forms
+              <span>View All Submissions</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="divide-y divide-slate-200">
-            {loading ? (
-              <div className="p-5 space-y-3">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-9 bg-slate-100 rounded animate-pulse" />
-                ))}
+          {loading ? (
+            <div className="p-5 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-14 bg-slate-100 rounded-lg animate-pulse" />
+              ))}
+            </div>
+          ) : submissions.length === 0 ? (
+            <div className="p-10 text-center space-y-3">
+              <div className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center mx-auto">
+                <UserPlus className="w-5 h-5 text-[#0B1F3A]" />
               </div>
-            ) : (
-              forms.map((form) => (
-                <div
-                  key={form.id}
-                  className="px-5 py-3 flex items-center justify-between gap-4 hover:bg-slate-50/70 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="font-mono text-xs font-medium text-[#0B1F3A] tabular-nums shrink-0">
-                      {form.code}
-                    </span>
-                    <span className="text-sm text-slate-700 truncate">{form.shortTitle}</span>
-                  </div>
-                  <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-0.5 whitespace-nowrap shrink-0">
-                    {form.mappingStatus === 'mapped' ? 'Mapped from PDF' : 'Pending'}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        {/* Invitation & Submissions Queue */}
-        <section className="lg:col-span-5 space-y-6">
-          <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-base font-semibold text-[#0B1F3A]">
-                Invitation Links
-              </h2>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-[#0B1F3A]">
+                  No employee invitations issued yet
+                </p>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  Create your first invitation link to allow a new hire to complete their nine
+                  joining forms online.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => onNavigateSection('invitations')}
-                className="text-xs font-medium text-[#1D4ED8] hover:underline whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] text-white text-xs font-semibold transition-colors"
               >
-                Create Link
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Create First Invitation</span>
               </button>
             </div>
-
-            {invitations.length === 0 ? (
-              <p className="text-sm text-slate-600">
-                No invitation links created yet. Generate a link to launch the registration-free
-                employee onboarding flow.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {invitations.slice(0, 3).map((inv) => {
-                  const isExpired = getEffectiveInvitationStatus(inv) === 'expired';
-                  return (
-                    <div
-                      key={inv.id}
-                      className="p-3.5 rounded-md border border-slate-200 bg-slate-50/60 space-y-2"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-[#0B1F3A] truncate">
-                              {inv.referenceLabel}
-                            </p>
-                            <span
-                              className={`text-[11px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${
-                                isExpired
-                                  ? 'border-red-200 bg-red-50 text-red-700'
-                                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              }`}
-                            >
-                              {isExpired ? 'Expired' : 'Active'}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-500 truncate">
-                            {inv.department} · {inv.targetRole}
-                          </p>
-                        </div>
-                        {inv.token && inv.invitePath ? (
-                          <button
-                            type="button"
-                            onClick={() => onOpenOnboardingLink(inv.token)}
-                            className="px-2.5 py-1.5 rounded text-xs font-medium text-[#1D4ED8] border border-blue-200 bg-white hover:bg-blue-50 whitespace-nowrap shrink-0"
-                          >
-                            Open Link
-                          </button>
-                        ) : (
-                          <span className="px-2 py-1 rounded text-[11px] font-medium text-slate-500 border border-slate-200 bg-white whitespace-nowrap shrink-0">
-                            Issued once
+          ) : (
+            <div className="divide-y divide-slate-200">
+              {submissions.slice(0, 6).map((sub) => {
+                const statusInfo = getFriendlySubmissionStatus(sub.invitation.submissionState);
+                const pct = Math.round((sub.completedFormsCount / 9) * 100);
+                return (
+                  <div
+                    key={sub.invitation.id}
+                    className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
+                  >
+                    <div className="min-w-0 space-y-1 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0B1F3A]">
+                          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">
+                            {sub.applicantName || sub.invitation.referenceLabel}
                           </span>
-                        )}
+                        </span>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${statusPillClasses(
+                            statusInfo.tone
+                          )}`}
+                        >
+                          {statusInfo.label}
+                        </span>
                       </div>
-                      <p className="font-mono text-[11px] text-slate-600 truncate">
-                        {inv.invitePath || inv.tokenHint || 'SHA-256 protected'}
-                      </p>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                        <span className="inline-flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{sub.invitation.department}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Briefcase className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{sub.invitation.targetRole}</span>
+                        </span>
+                      </div>
                     </div>
-                  );
-                })}
+
+                    <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
+                      <div className="w-32 space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-slate-600 tabular-nums">
+                          <span>{sub.completedFormsCount} of 9 forms</span>
+                          <span>{sub.documentsCount} docs</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                          <div
+                            className="h-full bg-[#EA580C] rounded-full transition-all"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onInspectSubmission(sub.invitation.id)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-[#0B1F3A] whitespace-nowrap"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Review</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Recent Activity & Quick Actions */}
+        <section className="lg:col-span-4 space-y-6">
+          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-[#0B1F3A]">Recent Activity</h2>
+              <span className="text-xs text-slate-500">Latest updates</span>
+            </div>
+
+            {loading ? (
+              <div className="p-5 space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 bg-slate-100 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="p-6 text-xs text-slate-500 text-center">
+                Activity updates will appear here as invitations are sent and employees submit forms.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-200">
+                {recentActivity.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onInspectSubmission(item.id)}
+                    className="w-full text-left px-5 py-3.5 hover:bg-slate-50 transition-colors flex items-start gap-3"
+                  >
+                    <span
+                      className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
+                        item.state === 'hr_verified'
+                          ? 'bg-emerald-600'
+                          : item.state === 'submitted' || item.state === 'preview_completed'
+                            ? 'bg-[#EA580C]'
+                            : 'bg-[#0B1F3A]'
+                      }`}
+                    />
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="text-xs font-semibold text-[#0B1F3A] leading-snug">
+                        {item.headline}
+                      </p>
+                      <p className="text-[11px] text-slate-500 leading-snug">{item.detail}</p>
+                    </div>
+                    <span className="text-[11px] text-slate-400 tabular-nums whitespace-nowrap shrink-0">
+                      {formatShortDate(item.timestamp)}
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-5 space-y-3">
-            <h2 className="text-base font-semibold text-[#0B1F3A]">
-              Employee Submissions Queue
-            </h2>
-            {submissions.length === 0 ? (
-              <p className="text-sm text-slate-600 leading-relaxed">
-                {isSupabaseConnected
-                  ? 'No candidate onboarding packets recorded yet. Create an invitation link to begin.'
-                  : 'No candidate packets recorded in the current fallback session yet. Create an invitation link to preview onboarding.'}
-              </p>
-            ) : (
-              <div className="divide-y divide-slate-200 border border-slate-200 rounded-md overflow-hidden">
-                {submissions.slice(0, 5).map((sub) => (
-                  <div
-                    key={sub.invitation.id}
-                    className="p-3 bg-white flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-[#0B1F3A] truncate">
-                        {sub.applicantName || sub.invitation.referenceLabel}
-                      </p>
-                      <p className="text-[11px] text-slate-500 truncate">
-                        {sub.completedFormsCount}/9 forms · {sub.documentsCount} docs ·{' '}
-                        {sub.invitation.submissionState}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onInspectSubmission(sub.invitation.id)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-slate-300 text-xs font-medium text-slate-700 hover:bg-slate-50 shrink-0"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Review</span>
-                    </button>
-                  </div>
-                ))}
+          <div className="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#0B1F3A] flex items-center justify-center text-white shrink-0">
+                <FileCheck2 className="w-4 h-4" />
               </div>
-            )}
+              <div>
+                <h3 className="text-sm font-semibold text-[#0B1F3A]">Standard Joining Forms</h3>
+                <p className="text-xs text-slate-500">All 9 DICS Global joining &amp; statutory forms</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Review all nine joining forms completed by new hires, verify supporting documents, and
+              download official filled PDFs individually or as a ZIP package.
+            </p>
+            <button
+              type="button"
+              onClick={() => onNavigateSection('forms')}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#C2410C] hover:text-[#9A3412]"
+            >
+              <span>View HR Forms Directory</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </section>
       </div>

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, FileText, Lock, Save, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, Lock, Save, Sparkles } from 'lucide-react';
 import {
-  isFormSlotCompleted,
+  getFormProgressState,
+  getFriendlyFormTitle,
   prefillFormFromBioData,
   validateFormCompletion,
 } from '../../shared/onboardingLogic';
@@ -64,7 +65,8 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
   const [saving, setSaving] = useState(false);
 
   const formId = form.id as AnyFormId;
-  const completed = isFormSlotCompleted(formId, formResponses);
+  const friendlyTitle = getFriendlyFormTitle(form.id);
+  const formState = getFormProgressState(formId, formResponses);
 
   useEffect(() => {
     setValidationErrors([]);
@@ -103,7 +105,7 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
     setValidationErrors([]);
     setSaveNotice(null);
     setPrefillNotice(
-      'Empty common employee fields have been prefilled from Form 01 (Bio-Data Form). Existing entries were preserved.'
+      'Your personal details from Bio Data Form have been copied into empty fields below.'
     );
   };
 
@@ -114,7 +116,7 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
     setSaving(true);
     try {
       await onSaveFormDraft(formId);
-      setSaveNotice(`Draft saved for ${form.code}.`);
+      setSaveNotice(`Progress saved for ${friendlyTitle}.`);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Unable to save draft.');
     } finally {
@@ -143,7 +145,7 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
       await onSaveFormDraft(formId);
       onNext();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Unable to save form response.');
+      setSaveError(err instanceof Error ? err.message : 'Unable to save form.');
     } finally {
       setSaving(false);
     }
@@ -221,28 +223,25 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
   };
 
   const hasBioDataName = formResponses['form-01'].nameInCapitals.trim().length > 0;
+  const nextFormTitle = !isLastForm ? getFriendlyFormTitle(`form-0${form.formNumber + 1}`) : '';
 
   return (
     <form
       onSubmit={handleSaveAndContinue}
       noValidate
-      className="rounded-lg border border-slate-200 bg-white p-5 sm:p-7 space-y-6"
+      className="rounded-xl border border-slate-200 bg-white p-5 sm:p-7 space-y-6"
     >
-      {/* Top Form Banner */}
+      {/* Top Form Header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-200 pb-5">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 font-mono">
-            <span className="text-[#1D4ED8] font-semibold">{form.code}</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#C2410C]">
+            <span>Step {form.formNumber} of 9</span>
             <span aria-hidden="true">·</span>
-            <span>Form {form.formNumber} of 9</span>
-            <span aria-hidden="true">·</span>
-            <span className="inline-flex items-center gap-1 text-slate-600">
-              <FileText className="w-3.5 h-3.5 text-slate-400" />
-              <span>{form.sourceFilename}</span>
+            <span className="text-slate-500 font-normal">
+              {form.pageCount} {form.pageCount === 1 ? 'Page' : 'Pages'}
             </span>
           </div>
-          <h2 className="text-xl font-semibold text-[#0B1F3A]">{form.title}</h2>
-          <p className="text-xs text-slate-500">{form.documentReference}</p>
+          <h2 className="text-xl font-semibold text-[#0B1F3A]">{friendlyTitle}</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -253,29 +252,33 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
               disabled={!hasBioDataName}
               title={
                 hasBioDataName
-                  ? 'Copy common employee particulars from Form 01 into blank fields'
-                  : 'Complete Name in Form 01 first to enable prefill'
+                  ? 'Copy your details from the Bio Data Form into empty fields'
+                  : 'Complete your name in Bio Data Form first'
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-blue-200 bg-blue-50/70 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-[#1D4ED8] transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-orange-200 bg-orange-50 hover:bg-orange-100/70 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold text-[#C2410C] transition-colors"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Fill Common Details from Form 01</span>
+              <span>Copy Details from Bio Data</span>
             </button>
           )}
 
           {locked ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-100 border border-slate-300 rounded px-2.5 py-1.5">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-300 rounded-md px-2.5 py-1.5">
               <Lock className="w-3.5 h-3.5" />
               <span>Submitted &amp; Locked</span>
             </span>
-          ) : completed ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2.5 py-1.5">
+          ) : formState === 'completed' ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2.5 py-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" />
               <span>Completed</span>
             </span>
+          ) : formState === 'in_progress' ? (
+            <span className="inline-flex items-center text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+              In Progress
+            </span>
           ) : (
-            <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 border border-slate-200 rounded px-2.5 py-1.5">
-              Pending Required Entries
+            <span className="inline-flex items-center text-xs font-semibold text-slate-600 bg-slate-100 border border-slate-200 rounded-md px-2.5 py-1.5">
+              Not Started
             </span>
           )}
         </div>
@@ -284,7 +287,7 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
       {prefillNotice && (
         <div
           role="status"
-          className="rounded-md border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-xs text-[#0B1F3A]"
+          className="rounded-lg border border-orange-200 bg-orange-50 px-3.5 py-2.5 text-xs text-[#0B1F3A]"
         >
           {prefillNotice}
         </div>
@@ -293,7 +296,7 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
       {saveNotice && (
         <div
           role="status"
-          className="rounded-md border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-800"
         >
           {saveNotice}
         </div>
@@ -302,13 +305,13 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
       {saveError && (
         <div
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700"
+          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs text-red-700"
         >
           {saveError}
         </div>
       )}
 
-      {/* Mapped Document Form View */}
+      {/* Form Content */}
       <fieldset disabled={locked} className="min-w-0">
         {renderFormView()}
       </fieldset>
@@ -317,11 +320,10 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
       {validationErrors.length > 0 && (
         <div
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 space-y-1.5"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800 space-y-1.5"
         >
           <p className="font-semibold">
-            Please complete the following required entries in {form.code} ({form.shortTitle}) before
-            continuing:
+            Please complete the following required details in {friendlyTitle} before continuing:
           </p>
           <ul className="list-disc pl-5 space-y-0.5">
             {validationErrors.map((err) => (
@@ -331,15 +333,15 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
         </div>
       )}
 
-      {/* Footer Navigation */}
+      {/* Footer Actions */}
       <div className="flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-200">
         <button
           type="button"
           onClick={onPrevious}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border border-slate-300 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 transition-colors"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-[#0B1F3A] bg-white hover:bg-slate-50 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>{isFirstForm ? 'Back to Overview' : `Previous (Form ${form.formNumber - 1})`}</span>
+          <span>{isFirstForm ? 'Back to Overview' : 'Previous Form'}</span>
         </button>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
@@ -350,7 +352,7 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
               onClick={() => {
                 void handleExplicitSaveDraft();
               }}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-md border border-slate-300 text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-[#0B1F3A] bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors"
             >
               <Save className="w-4 h-4" />
               <span>{saving ? 'Saving...' : 'Save Draft'}</span>
@@ -360,16 +362,16 @@ export const FormSlotEditor: React.FC<FormSlotEditorProps> = ({
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#1D4ED8] hover:bg-[#1E40AF] disabled:opacity-60 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#C2410C] hover:bg-[#9A3412] disabled:opacity-60 text-sm font-semibold text-white transition-colors"
           >
             <span>
               {locked
                 ? isLastForm
-                  ? 'View Document Uploads'
-                  : `Next: Form ${String(form.formNumber + 1).padStart(2, '0')}`
+                  ? 'View Supporting Documents'
+                  : `Next: ${nextFormTitle}`
                 : isLastForm
-                  ? 'Save & Continue to Document Upload'
-                  : `Save & Continue to Form ${String(form.formNumber + 1).padStart(2, '0')}`}
+                  ? 'Save & Continue to Documents'
+                  : `Save & Continue to ${nextFormTitle}`}
             </span>
             <ArrowRight className="w-4 h-4" />
           </button>

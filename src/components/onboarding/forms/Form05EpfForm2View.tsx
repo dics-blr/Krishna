@@ -206,7 +206,7 @@ export const Form05EpfForm2View: React.FC<Form05EpfForm2ViewProps> = ({
                 ],
               })
             }
-            className="inline-flex items-center gap-1 text-xs font-medium text-[#1D4ED8] hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[#C2410C] hover:underline"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Nominee Row</span>
@@ -306,7 +306,7 @@ export const Form05EpfForm2View: React.FC<Form05EpfForm2ViewProps> = ({
               type="checkbox"
               checked={data.partACertifyNoFamily}
               onChange={(e) => onChange({ partACertifyNoFamily: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span>
               1 * Certified that I have no family as defined in para 2(g) of the Employees’ Provident
@@ -319,7 +319,7 @@ export const Form05EpfForm2View: React.FC<Form05EpfForm2ViewProps> = ({
               type="checkbox"
               checked={data.partACertifyParentsDependent}
               onChange={(e) => onChange({ partACertifyParentsDependent: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span>2 * Certified that my father/mother is/are dependent upon me.</span>
           </label>
@@ -418,7 +418,7 @@ export const Form05EpfForm2View: React.FC<Form05EpfForm2ViewProps> = ({
             type="checkbox"
             checked={data.partBCertifyNoFamily}
             onChange={(e) => onChange({ partBCertifyNoFamily: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
           />
           <span>
             ** Certified that I have no family, as defined in para 2(vii) of Employees’ Pension
@@ -518,7 +518,7 @@ export const Form05EpfForm2View: React.FC<Form05EpfForm2ViewProps> = ({
               type="checkbox"
               checked={data.declarationConfirmed}
               onChange={(e) => onChange({ declarationConfirmed: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span className="text-xs text-slate-800">
               I confirm that the above EPF &amp; EPS Nomination and Declaration entries in Form 2

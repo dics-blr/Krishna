@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { AdminLayout } from './components/AdminLayout';
-import { ArchitectureView } from './components/ArchitectureView';
+import { EmployeeSubmissionsView } from './components/EmployeeSubmissionsView';
 import { FormsRegistryView } from './components/FormsRegistryView';
 import { HrLoginView } from './components/HrLoginView';
+import { HrVerificationView } from './components/HrVerificationView';
 import { InvitationManagerView } from './components/InvitationManagerView';
 import { SubmissionDetailModal } from './components/SubmissionDetailModal';
 import { EmployeeOnboardingPortal } from './components/onboarding/EmployeeOnboardingPortal';
@@ -32,11 +33,14 @@ function parseLocationRoute(): RouteState {
   if (pathname === '/invitations') {
     return { kind: 'admin', section: 'invitations' };
   }
+  if (pathname === '/submissions') {
+    return { kind: 'admin', section: 'submissions' };
+  }
+  if (pathname === '/verification') {
+    return { kind: 'admin', section: 'verification' };
+  }
   if (pathname === '/forms') {
     return { kind: 'admin', section: 'forms' };
-  }
-  if (pathname === '/architecture') {
-    return { kind: 'admin', section: 'architecture' };
   }
   return { kind: 'admin', section: 'overview' };
 }
@@ -45,10 +49,12 @@ function sectionToPath(section: AdminNavSection): string {
   switch (section) {
     case 'invitations':
       return '/invitations';
+    case 'submissions':
+      return '/submissions';
+    case 'verification':
+      return '/verification';
     case 'forms':
       return '/forms';
-    case 'architecture':
-      return '/architecture';
     case 'overview':
     default:
       return '/';
@@ -196,7 +202,7 @@ export default function App() {
       return;
     }
     setInvitationNotice(
-      'No active invitation link with a one-time token is present in this browser session. Create a new invitation link below to open the employee onboarding portal.'
+      'Create an employee invitation link below to preview the employee onboarding experience.'
     );
     navigateAdminSection('invitations');
   };
@@ -208,6 +214,27 @@ export default function App() {
         token={route.token}
         onReturnToAdmin={() => navigateAdminSection('overview')}
       />
+    );
+  }
+
+  // Wait for session check before deciding between HR Login and HR Dashboard
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="rounded-xl border border-slate-200 bg-white px-8 py-7 text-center space-y-4 shadow-xs">
+          <img
+            src="/assets/dics-logo.png"
+            alt="DICS Global"
+            className="h-10 w-auto mx-auto object-contain"
+          />
+          <div className="space-y-1">
+            <div className="h-1.5 w-36 bg-slate-200 rounded-full overflow-hidden mx-auto">
+              <div className="h-full w-1/2 bg-[#EA580C] rounded-full animate-pulse" />
+            </div>
+            <p className="text-xs text-slate-500">Loading DICS Global HR Portal...</p>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -273,14 +300,29 @@ export default function App() {
         />
       )}
 
+      {route.section === 'submissions' && (
+        <EmployeeSubmissionsView
+          submissions={submissions}
+          loading={loading}
+          onInspectSubmission={(id) => setInspectingInvitationId(id)}
+          onNavigateSection={navigateAdminSection}
+        />
+      )}
+
+      {route.section === 'verification' && (
+        <HrVerificationView
+          submissions={submissions}
+          loading={loading}
+          onInspectSubmission={(id) => setInspectingInvitationId(id)}
+        />
+      )}
+
       {route.section === 'forms' && (
         <FormsRegistryView
           forms={forms}
           onOpenSampleOnboarding={handleOpenEmployeePreview}
         />
       )}
-
-      {route.section === 'architecture' && <ArchitectureView readiness={readiness} />}
 
       <SubmissionDetailModal
         invitationId={inspectingInvitationId}

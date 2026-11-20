@@ -441,7 +441,7 @@ export const Form01BioDataView: React.FC<Form01BioDataViewProps> = ({
                   ],
                 })
               }
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#1D4ED8] hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#C2410C] hover:underline"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Row</span>
@@ -485,7 +485,7 @@ export const Form01BioDataView: React.FC<Form01BioDataViewProps> = ({
                             next[idx] = { ...row, [skill]: e.target.checked };
                             onChange({ languagesKnown: next });
                           }}
-                          className="h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+                          className="h-4 w-4 rounded border-slate-300 text-[#C2410C]"
                         />
                       </td>
                     ))}
@@ -537,7 +537,7 @@ export const Form01BioDataView: React.FC<Form01BioDataViewProps> = ({
                   ],
                 })
               }
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#1D4ED8] hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#C2410C] hover:underline"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Row</span>
@@ -710,7 +710,7 @@ export const Form01BioDataView: React.FC<Form01BioDataViewProps> = ({
                   ],
                 })
               }
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#1D4ED8] hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#C2410C] hover:underline"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Row</span>
@@ -1076,7 +1076,7 @@ export const Form01BioDataView: React.FC<Form01BioDataViewProps> = ({
               type="checkbox"
               checked={data.declarationConfirmed}
               onChange={(e) => onChange({ declarationConfirmed: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span className="text-xs text-slate-800 leading-relaxed">
               I certify that the information given by me are true, complete and correct to the best

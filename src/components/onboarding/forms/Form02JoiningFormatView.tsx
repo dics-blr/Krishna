@@ -14,7 +14,7 @@ export const Form02JoiningFormatView: React.FC<Form02JoiningFormatViewProps> = (
 }) => {
   return (
     <div className="space-y-6">
-      <FormDocumentHeader title="JOINING FORMAT" rightBadge="DICS-HR-02" />
+      <FormDocumentHeader title="JOINING FORMAT" rightBadge="1 Page" />
 
       {/* Main Particulars */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -260,7 +260,7 @@ export const Form02JoiningFormatView: React.FC<Form02JoiningFormatViewProps> = (
             type="checkbox"
             checked={data.declarationConfirmed}
             onChange={(e) => onChange({ declarationConfirmed: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
           />
           <span className="text-xs text-slate-700">
             I confirm that my joining details, residential addresses, and emergency contact details

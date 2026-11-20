@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HR_FORMS_CATALOG } from './formsCatalog';
 import {
+  DICS_DEPARTMENTS,
+  DICS_JOB_DESIGNATIONS,
   buildSupabaseStoragePath,
   calculateOnboardingProgress,
   createEmptyOfficeUseEntry,
@@ -13,11 +15,15 @@ import {
   generateInvitationToken,
   generateSubmissionReceiptCode,
   getEffectiveInvitationStatus,
+  getFormProgressState,
   getFormResponseSummary,
+  getFriendlyFormTitle,
+  getFriendlySubmissionStatus,
   isInvitationAccessible,
   isValidInvitationTokenFormat,
   isValidUuid,
   prefillFormFromBioData,
+  validateDepartmentAndDesignation,
   validateDocumentFile,
   validateFormCompletion,
   validateInvitationInput,
@@ -525,4 +531,66 @@ test('Stage 2 helpers and Stage1InMemoryRepository persist drafts, lock submissi
   assert.equal(updatedOffice.form03EmpNo, 'DICS-042');
   const detail = await repo.getSubmissionDetail(inv.id);
   assert.equal(detail.invitation.submissionState, 'hr_verified');
+});
+
+test('department and job designation options and custom Other validation work cleanly', () => {
+  assert.ok(DICS_DEPARTMENTS.includes('Instrumentation & Controls'));
+  assert.ok(DICS_DEPARTMENTS.includes('Other'));
+  assert.ok(DICS_JOB_DESIGNATIONS.includes('Senior Engineer'));
+  assert.ok(DICS_JOB_DESIGNATIONS.includes('Other'));
+
+  const validStandard = validateDepartmentAndDesignation({
+    departmentOption: 'Engineering',
+    customDepartment: '',
+    designationOption: 'Design Engineer',
+    customDesignation: '',
+  });
+  assert.equal(validStandard.valid, true);
+  assert.equal(validStandard.department, 'Engineering');
+  assert.equal(validStandard.targetRole, 'Design Engineer');
+
+  const missingCustomDept = validateDepartmentAndDesignation({
+    departmentOption: 'Other',
+    customDepartment: ' ',
+    designationOption: 'Engineer',
+    customDesignation: '',
+  });
+  assert.equal(missingCustomDept.valid, false);
+
+  const missingCustomRole = validateDepartmentAndDesignation({
+    departmentOption: 'Service',
+    customDepartment: '',
+    designationOption: 'Other',
+    customDesignation: 'A',
+  });
+  assert.equal(missingCustomRole.valid, false);
+
+  const validCustomBoth = validateDepartmentAndDesignation({
+    departmentOption: 'Other',
+    customDepartment: ' R&D Testing ',
+    designationOption: 'Other',
+    customDesignation: ' Lead Specialist ',
+  });
+  assert.equal(validCustomBoth.valid, true);
+  assert.equal(validCustomBoth.department, 'R&D Testing');
+  assert.equal(validCustomBoth.targetRole, 'Lead Specialist');
+});
+
+test('friendly form titles, statuses, and progress states map cleanly for UI display', () => {
+  assert.equal(getFriendlyFormTitle('form-01'), 'Bio Data Form');
+  assert.equal(getFriendlyFormTitle('form-05'), 'EPF Nomination Form');
+  assert.equal(getFriendlyFormTitle('form-09'), 'Gratuity Form F');
+
+  assert.equal(getFriendlySubmissionStatus('not_submitted').label, 'Not Started');
+  assert.equal(getFriendlySubmissionStatus('in_progress').label, 'In Progress');
+  assert.equal(getFriendlySubmissionStatus('submitted').label, 'Submitted');
+  assert.equal(getFriendlySubmissionStatus('hr_verified').label, 'Verified');
+
+  const responses = createInitialFormResponses();
+  assert.equal(getFormProgressState('form-01', responses), 'not_started');
+  responses['form-01'].nameInCapitals = 'ARJUN RAO';
+  responses['form-01'].updatedAt = '2026-11-20T00:00:00.000Z';
+  assert.equal(getFormProgressState('form-01', responses), 'in_progress');
+  populateAllForms(responses);
+  assert.equal(getFormProgressState('form-01', responses), 'completed');
 });

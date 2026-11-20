@@ -145,7 +145,7 @@ export const Form07Form25View: React.FC<Form07Form25ViewProps> = ({
             type="checkbox"
             checked={data.declarationConfirmed}
             onChange={(e) => onChange({ declarationConfirmed: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
           />
           <span className="text-xs text-slate-800">
             I confirm this nomination under Form No -25 [(See Rule 126)].{' '}

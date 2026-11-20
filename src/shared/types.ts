@@ -1,4 +1,10 @@
-export type AdminNavSection = 'overview' | 'invitations' | 'forms' | 'architecture';
+export type AdminNavSection =
+  | 'overview'
+  | 'invitations'
+  | 'submissions'
+  | 'verification'
+  | 'forms'
+  | 'architecture';
 
 export type InvitationStatus = 'active' | 'expired';
 

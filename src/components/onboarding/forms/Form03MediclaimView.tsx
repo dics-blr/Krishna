@@ -14,7 +14,7 @@ export const Form03MediclaimView: React.FC<Form03MediclaimViewProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <FormDocumentHeader title="MEDICLAIM DECLARATION FORM" rightBadge="DICS-HR-03" />
+      <FormDocumentHeader title="MEDICLAIM DECLARATION FORM" rightBadge="1 Page" />
 
       {/* Employee Details Table */}
       <div className="rounded-md border border-slate-200 overflow-hidden">
@@ -185,7 +185,7 @@ export const Form03MediclaimView: React.FC<Form03MediclaimViewProps> = ({
             type="checkbox"
             checked={data.policyNoteConfirmed}
             onChange={(e) => onChange({ policyNoteConfirmed: e.target.checked })}
-            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
           />
           <span className="text-xs text-slate-800">
             I confirm the Mediclaim declaration family particulars above as per medical insurance

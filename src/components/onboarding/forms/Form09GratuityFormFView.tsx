@@ -93,7 +93,7 @@ export const Form09GratuityFormFView: React.FC<Form09GratuityFormFViewProps> = (
                 type="checkbox"
                 checked={data.certifyNomineesAreFamily}
                 onChange={(e) => onChange({ certifyNomineesAreFamily: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
               />
               <span>
                 2. I hereby certify that the person(s) mentioned is/are a member(s) of my family
@@ -105,7 +105,7 @@ export const Form09GratuityFormFView: React.FC<Form09GratuityFormFViewProps> = (
                 type="checkbox"
                 checked={data.declareNoFamily}
                 onChange={(e) => onChange({ declareNoFamily: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
               />
               <span>
                 3. I hereby declare that I have no family within the meaning of clause (h) of Section
@@ -117,7 +117,7 @@ export const Form09GratuityFormFView: React.FC<Form09GratuityFormFViewProps> = (
                 type="checkbox"
                 checked={data.fatherMotherNotDependent}
                 onChange={(e) => onChange({ fatherMotherNotDependent: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
               />
               <span>4 (a) My father/mother/parents is/are not dependent on me.</span>
             </label>
@@ -126,7 +126,7 @@ export const Form09GratuityFormFView: React.FC<Form09GratuityFormFViewProps> = (
                 type="checkbox"
                 checked={data.husbandParentsNotDependent}
                 onChange={(e) => onChange({ husbandParentsNotDependent: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
               />
               <span>4 (b) My husband’s father/mother/parents is/are not dependent on my husband.</span>
             </label>
@@ -161,7 +161,7 @@ export const Form09GratuityFormFView: React.FC<Form09GratuityFormFViewProps> = (
                   ],
                 })
               }
-              className="inline-flex items-center gap-1 text-xs font-medium text-[#1D4ED8] hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[#C2410C] hover:underline"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add Row</span>
@@ -559,7 +559,7 @@ export const Form09GratuityFormFView: React.FC<Form09GratuityFormFViewProps> = (
               type="checkbox"
               checked={data.declarationConfirmed}
               onChange={(e) => onChange({ declarationConfirmed: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span className="text-xs text-slate-800">
               I confirm that the above Gratuity Form ‘F’ nomination and witness declarations have

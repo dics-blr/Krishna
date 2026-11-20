@@ -23,7 +23,149 @@ import type {
   OnboardingInvitation,
   OnboardingSessionState,
   ProgressBreakdown,
+  SubmissionState,
 } from './types';
+
+export const DICS_DEPARTMENTS = [
+  'Engineering',
+  'Electrical',
+  'Instrumentation & Controls',
+  'Automation',
+  'Sales & Marketing',
+  'Service',
+  'Projects',
+  'Production',
+  'Quality',
+  'Procurement',
+  'Finance & Accounts',
+  'Human Resources',
+  'Administration',
+  'IT',
+  'Other',
+] as const;
+
+export const DICS_JOB_DESIGNATIONS = [
+  'Engineer',
+  'Senior Engineer',
+  'Design Engineer',
+  'Project Engineer',
+  'Service Engineer',
+  'Sales Engineer',
+  'Manager',
+  'Assistant Manager',
+  'Technician',
+  'Executive',
+  'Trainee',
+  'Other',
+] as const;
+
+export const FRIENDLY_FORM_TITLES: Record<AnyFormId, string> = {
+  'form-01': 'Bio Data Form',
+  'form-02': 'Joining Format',
+  'form-03': 'Mediclaim Declaration',
+  'form-04': 'Personal File Checklist',
+  'form-05': 'EPF Nomination Form',
+  'form-06': 'ESIC Declaration Form',
+  'form-07': 'Form No. 25',
+  'form-08': 'Form 11',
+  'form-09': 'Gratuity Form F',
+};
+
+export function getFriendlyFormTitle(formId: string): string {
+  return (FRIENDLY_FORM_TITLES as Record<string, string>)[formId] ?? 'Onboarding Form';
+}
+
+export function getFriendlySubmissionStatus(state: SubmissionState): {
+  label: string;
+  tone: 'neutral' | 'warning' | 'info' | 'success';
+} {
+  switch (state) {
+    case 'hr_verified':
+      return { label: 'Verified', tone: 'success' };
+    case 'submitted':
+    case 'preview_completed':
+      return { label: 'Submitted', tone: 'info' };
+    case 'in_progress':
+      return { label: 'In Progress', tone: 'warning' };
+    case 'not_submitted':
+    default:
+      return { label: 'Not Started', tone: 'neutral' };
+  }
+}
+
+export function resolveCustomOptionValue(selectedOption: string, customValue: string): string {
+  return selectedOption === 'Other' ? customValue.trim() : selectedOption.trim();
+}
+
+export function validateDepartmentAndDesignation(input: {
+  departmentOption: string;
+  customDepartment: string;
+  designationOption: string;
+  customDesignation: string;
+}): {
+  valid: boolean;
+  department: string;
+  targetRole: string;
+  error?: string;
+} {
+  const department = resolveCustomOptionValue(input.departmentOption, input.customDepartment);
+  const targetRole = resolveCustomOptionValue(input.designationOption, input.customDesignation);
+
+  if (input.departmentOption === 'Other' && department.length < 2) {
+    return {
+      valid: false,
+      department,
+      targetRole,
+      error: 'Please enter the department name (at least 2 characters).',
+    };
+  }
+  if (department.length < 2) {
+    return {
+      valid: false,
+      department,
+      targetRole,
+      error: 'Please select a valid department.',
+    };
+  }
+  if (input.designationOption === 'Other' && targetRole.length < 2) {
+    return {
+      valid: false,
+      department,
+      targetRole,
+      error: 'Please enter the job designation (at least 2 characters).',
+    };
+  }
+  if (targetRole.length < 2) {
+    return {
+      valid: false,
+      department,
+      targetRole,
+      error: 'Please select a valid job designation.',
+    };
+  }
+
+  return { valid: true, department, targetRole };
+}
+
+export type FormProgressState = 'not_started' | 'in_progress' | 'completed';
+
+export function getFormProgressState(
+  formId: AnyFormId,
+  responses: OnboardingFormResponses
+): FormProgressState {
+  if (isFormSlotCompleted(formId, responses)) {
+    return 'completed';
+  }
+  const entry = responses[formId] as { updatedAt?: string | null };
+  if (entry?.updatedAt) {
+    return 'in_progress';
+  }
+  const summary = getFormResponseSummary(formId, responses);
+  if (!summary.toLowerCase().startsWith('no ') && !summary.toLowerCase().startsWith('checklist not')) {
+    return 'in_progress';
+  }
+  return 'not_started';
+}
 
 export const ALLOWED_DOCUMENT_MIME_TYPES = [
   'application/pdf',
@@ -985,7 +1127,7 @@ export function isInvitationAccessible(
     return {
       accessible: false,
       reason:
-        'Invitation token was not found. In Stage 1, invitation links are stored in temporary in-memory session state and reset if the page is refreshed.',
+        'This onboarding invitation link could not be found or is no longer active. Please contact DICS Global HR for an updated link.',
     };
   }
   if (invitation.status === 'expired') {

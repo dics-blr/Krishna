@@ -8,15 +8,18 @@
   --color-navy-950: #061326;
   --color-navy-900: #0b1f3a;
   --color-navy-800: #132d52;
-  --color-corporate-600: #1d4ed8;
-  --color-corporate-700: #1e40af;
+  --color-orange-700: #9a3412;
+  --color-orange-600: #c2410c;
+  --color-orange-500: #ea580c;
+  --color-orange-100: #ffedd5;
+  --color-orange-50: #fff7ed;
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
     color: #0f172a;
-    background-color: #ffffff;
+    background-color: #f8fafc;
   }
 
   h1,

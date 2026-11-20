@@ -9,7 +9,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { HR_FORMS_CATALOG } from '../../shared/formsCatalog';
-import { isFormSlotCompleted } from '../../shared/onboardingLogic';
+import { getFormProgressState, getFriendlyFormTitle } from '../../shared/onboardingLogic';
 import type { AnyFormId, OnboardingSessionState, ProgressBreakdown } from '../../shared/types';
 
 export type OnboardingStepKey =
@@ -40,21 +40,21 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
 
   return (
     <aside
-      aria-label="Onboarding progress tracker"
-      className="rounded-lg border border-slate-200 bg-white overflow-hidden"
+      aria-label="Onboarding checklist steps"
+      className="rounded-xl border border-slate-200 bg-white overflow-hidden"
     >
-      <div className="p-4 border-b border-slate-200 space-y-2.5 bg-slate-50/70">
+      <div className="p-4 border-b border-slate-200 space-y-2.5 bg-[#0B1F3A] text-white">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-[#0B1F3A]">Onboarding Progress</h2>
+          <h2 className="text-sm font-semibold text-white">Your Progress</h2>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-semibold text-[#1D4ED8] tabular-nums">
+            <span className="text-xs font-bold text-[#FDBA74] tabular-nums">
               {progress.percentComplete}%
             </span>
             <button
               type="button"
               onClick={() => setMobileStepsOpen((prev) => !prev)}
               aria-expanded={mobileStepsOpen}
-              className="lg:hidden inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-slate-300 bg-white text-xs font-medium text-slate-700"
+              className="lg:hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-white/20 bg-white/10 text-xs font-medium text-white"
             >
               <span>Steps</span>
               {mobileStepsOpen ? (
@@ -71,74 +71,80 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
           aria-valuenow={progress.percentComplete}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label="Overall onboarding completion"
-          className="h-2 w-full rounded-sm bg-slate-200 overflow-hidden"
+          aria-label="Overall onboarding progress"
+          className="h-2 w-full rounded-full bg-white/20 overflow-hidden"
         >
           <div
-            className="h-full bg-[#1D4ED8] transition-all duration-200"
+            className="h-full bg-[#EA580C] rounded-full transition-all duration-200"
             style={{ width: `${progress.percentComplete}%` }}
           />
         </div>
 
-        <p className="text-xs text-slate-600 tabular-nums">
-          {progress.completedFormsCount} of {progress.totalFormsCount} HR forms completed ·{' '}
-          {progress.uploadedDocumentsCount} file(s) attached
+        <p className="text-xs text-slate-300 tabular-nums">
+          {progress.completedFormsCount} of {progress.totalFormsCount} forms ·{' '}
+          {progress.uploadedDocumentsCount}{' '}
+          {progress.uploadedDocumentsCount === 1 ? 'document' : 'documents'}
         </p>
       </div>
 
       <nav
         aria-label="Onboarding steps"
-        className={`p-2 space-y-0.5 ${mobileStepsOpen ? 'block' : 'hidden lg:block'}`}
+        className={`p-2.5 space-y-0.5 ${mobileStepsOpen ? 'block' : 'hidden lg:block'}`}
       >
         <button
           type="button"
           onClick={() => handleStepSelect('overview')}
-          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-xs font-medium text-left transition-colors ${
+          className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${
             activeStep === 'overview'
-              ? 'bg-[#0B1F3A] text-white'
-              : 'text-slate-700 hover:bg-slate-100'
+              ? 'bg-[#C2410C] text-white'
+              : 'text-[#0B1F3A] hover:bg-slate-100'
           }`}
         >
           <FileText className="w-4 h-4 shrink-0" />
-          <span>00. Invitation Overview</span>
+          <span>Onboarding Overview</span>
         </button>
 
-        <div className="pt-2 pb-1 px-3 text-[11px] font-semibold text-slate-500">
-          Nine Original HR Forms
+        <div className="pt-2.5 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          Joining Forms
         </div>
 
         {HR_FORMS_CATALOG.map((form) => {
-          const isComplete = isFormSlotCompleted(form.id as AnyFormId, session.formResponses);
+          const state = getFormProgressState(form.id as AnyFormId, session.formResponses);
           const isActive = activeStep === form.id;
           return (
             <button
               key={form.id}
               type="button"
               onClick={() => handleStepSelect(form.id as OnboardingStepKey)}
-              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-xs font-medium text-left transition-colors ${
+              className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors ${
                 isActive
-                  ? 'bg-[#0B1F3A] text-white'
-                  : 'text-slate-700 hover:bg-slate-100'
+                  ? 'bg-[#C2410C] text-white font-semibold'
+                  : 'text-slate-700 hover:bg-slate-100 hover:text-[#0B1F3A]'
               }`}
             >
               <span className="truncate">
-                <span className="font-mono tabular-nums mr-1.5">
-                  {String(form.formNumber).padStart(2, '0')}.
-                </span>
-                {form.shortTitle}
+                <span className="tabular-nums mr-1.5 font-semibold">{form.formNumber}.</span>
+                {getFriendlyFormTitle(form.id)}
               </span>
-              {isComplete ? (
+              {state === 'completed' ? (
                 <CheckCircle2
-                  aria-label={`Form ${form.formNumber} completed`}
+                  aria-label={`${getFriendlyFormTitle(form.id)} completed`}
                   className={`w-4 h-4 shrink-0 ${
-                    isActive ? 'text-emerald-300' : 'text-emerald-600'
+                    isActive ? 'text-white' : 'text-emerald-600'
+                  }`}
+                />
+              ) : state === 'in_progress' ? (
+                <span
+                  aria-label={`${getFriendlyFormTitle(form.id)} in progress`}
+                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                    isActive ? 'bg-white' : 'bg-[#EA580C]'
                   }`}
                 />
               ) : (
                 <Circle
-                  aria-label={`Form ${form.formNumber} pending`}
+                  aria-label={`${getFriendlyFormTitle(form.id)} not started`}
                   className={`w-4 h-4 shrink-0 ${
-                    isActive ? 'text-slate-300' : 'text-slate-300'
+                    isActive ? 'text-white/70' : 'text-slate-300'
                   }`}
                 />
               )}
@@ -146,41 +152,45 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
           );
         })}
 
-        <div className="pt-2 pb-1 px-3 text-[11px] font-semibold text-slate-500">
-          Attachments &amp; Submission
+        <div className="pt-2.5 pb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          Documents &amp; Submission
         </div>
 
         <button
           type="button"
           onClick={() => handleStepSelect('documents')}
-          className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md text-xs font-medium text-left transition-colors ${
+          className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${
             activeStep === 'documents'
-              ? 'bg-[#0B1F3A] text-white'
-              : 'text-slate-700 hover:bg-slate-100'
+              ? 'bg-[#C2410C] text-white'
+              : 'text-[#0B1F3A] hover:bg-slate-100'
           }`}
         >
           <span className="flex items-center gap-2 truncate">
             <Upload className="w-4 h-4 shrink-0" />
-            <span>Document Upload</span>
+            <span>Supporting Documents</span>
           </span>
           {progress.hasUploadedDocument ? (
             <CheckCircle2
               className={`w-4 h-4 shrink-0 ${
-                activeStep === 'documents' ? 'text-emerald-300' : 'text-emerald-600'
+                activeStep === 'documents' ? 'text-white' : 'text-emerald-600'
               }`}
             />
           ) : (
-            <Circle className="w-4 h-4 shrink-0 text-slate-300" />
+            <Circle
+              className={`w-4 h-4 shrink-0 ${
+                activeStep === 'documents' ? 'text-white/70' : 'text-slate-300'
+              }`}
+            />
           )}
         </button>
 
         <button
           type="button"
           onClick={() => handleStepSelect('review')}
-          className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-md text-xs font-medium text-left transition-colors ${
+          className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold text-left transition-colors ${
             activeStep === 'review'
-              ? 'bg-[#0B1F3A] text-white'
-              : 'text-slate-700 hover:bg-slate-100'
+              ? 'bg-[#C2410C] text-white'
+              : 'text-[#0B1F3A] hover:bg-slate-100'
           }`}
         >
           <span className="flex items-center gap-2 truncate">
@@ -190,11 +200,15 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
           {progress.isSubmitted ? (
             <CheckCircle2
               className={`w-4 h-4 shrink-0 ${
-                activeStep === 'review' ? 'text-emerald-300' : 'text-emerald-600'
+                activeStep === 'review' ? 'text-white' : 'text-emerald-600'
               }`}
             />
           ) : (
-            <Circle className="w-4 h-4 shrink-0 text-slate-300" />
+            <Circle
+              className={`w-4 h-4 shrink-0 ${
+                activeStep === 'review' ? 'text-white/70' : 'text-slate-300'
+              }`}
+            />
           )}
         </button>
       </nav>

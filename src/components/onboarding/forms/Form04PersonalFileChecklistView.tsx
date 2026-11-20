@@ -219,7 +219,7 @@ export const Form04PersonalFileChecklistView: React.FC<Form04PersonalFileCheckli
               type="checkbox"
               checked={data.employeeConfirmed}
               onChange={(e) => onChange({ employeeConfirmed: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span className="text-xs text-slate-800">
               I have reviewed the Personal File Checklist items (DICS/HR/EPFC) and confirmed my

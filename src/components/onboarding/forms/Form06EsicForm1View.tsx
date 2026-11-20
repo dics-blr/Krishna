@@ -256,7 +256,7 @@ export const Form06EsicForm1View: React.FC<Form06EsicForm1ViewProps> = ({
                 type="checkbox"
                 checked={data.hasPreviousEmployment}
                 onChange={(e) => onChange({ hasPreviousEmployment: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
               />
               <span>
                 12. In case of any previous employment please fill up the details as under:-
@@ -350,7 +350,7 @@ export const Form06EsicForm1View: React.FC<Form06EsicForm1ViewProps> = ({
               type="checkbox"
               checked={data.declarationConfirmed}
               onChange={(e) => onChange({ declarationConfirmed: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#1D4ED8]"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#C2410C]"
             />
             <span className="text-xs text-slate-800 leading-relaxed">
               I hereby declare that the particulars given by me are correct to the best of my
@@ -397,7 +397,7 @@ export const Form06EsicForm1View: React.FC<Form06EsicForm1ViewProps> = ({
                 ],
               })
             }
-            className="inline-flex items-center gap-1 text-xs font-medium text-[#1D4ED8] hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-[#C2410C] hover:underline"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Row</span>
