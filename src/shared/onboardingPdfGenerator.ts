@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { PDFDocument, type PDFFont, type PDFImage, type PDFPage, StandardFonts, rgb } from 'pdf-lib';
-import { DICS_COMPANY_HEADER } from './formsCatalog';
+import { DICS_COMPANY_HEADER } from './formsCatalog.ts';
 import type {
   AnyFormId,
   Form01BioData,
