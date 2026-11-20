@@ -2,7 +2,7 @@ import {
   DICS_COMPANY_HEADER,
   HR_FORMS_CATALOG,
   PERSONAL_FILE_CHECKLIST_ITEMS,
-} from './formsCatalog.js';
+} from './formsCatalog.ts';
 import type {
   AnyFormId,
   ChecklistItemStatus,
