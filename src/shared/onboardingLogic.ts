@@ -24,7 +24,7 @@ import type {
   OnboardingSessionState,
   ProgressBreakdown,
   SubmissionState,
-} from './types';
+} from './types.ts';
 
 export const DICS_DEPARTMENTS = [
   'Engineering',
