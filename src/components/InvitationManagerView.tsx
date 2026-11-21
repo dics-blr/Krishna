@@ -503,7 +503,7 @@ export const InvitationManagerView: React.FC<InvitationManagerViewProps> = ({
                 <tbody className="divide-y divide-slate-200 text-sm">
                   {filtered.map((inv) => {
                     const hasLink = Boolean(inv.token && inv.invitePath);
-                    const fullUrl = hasLink ? `${window.location.origin}${inv.invitePath}` : '';
+                    const fullUrl = hasLink ? `https://dicsemployeeonboarding.vercel.app${inv.invitePath}` : '';
                     const isCopied = copiedId === inv.id;
                     const effectiveStatus = getEffectiveInvitationStatus(inv);
                     const isExpired = effectiveStatus === 'expired';
@@ -609,7 +609,7 @@ export const InvitationManagerView: React.FC<InvitationManagerViewProps> = ({
             <div className="md:hidden divide-y divide-slate-200">
               {filtered.map((inv) => {
                 const hasLink = Boolean(inv.token && inv.invitePath);
-                const fullUrl = hasLink ? `${window.location.origin}${inv.invitePath}` : '';
+                const fullUrl = hasLink ? `https://dicsemployeeonboarding.vercel.app${inv.invitePath}` : '';
                 const isCopied = copiedId === inv.id;
                 const effectiveStatus = getEffectiveInvitationStatus(inv);
                 const isExpired = effectiveStatus === 'expired';
