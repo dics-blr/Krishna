@@ -117,8 +117,8 @@ export const InvitationManagerView: React.FC<InvitationManagerViewProps> = ({
     try {
       const created = await onCreateInvitation(validation.normalized);
       const inviteUrl = created.invitePath
-        ? `${window.location.origin}${created.invitePath}`
-        : undefined;
+  ? `https://dicsemployeeonboarding.vercel.app${created.invitePath}`
+  : undefined;
       setReferenceLabel('');
       setCustomDepartment('');
       setCustomDesignation('');
